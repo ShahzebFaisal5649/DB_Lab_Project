@@ -1,0 +1,112 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id       Int      @id @default(autoincrement())
+  name     String
+  email    String   @unique
+  password String
+  role     String   // "STUDENT", "TUTOR", or "ADMIN"
+
+  student  Student?
+  tutor    Tutor?
+  admin    Admin?
+
+  feedbacksGiven    Feedback[]         @relation("FeedbackGiver")
+  feedbacksReceived Feedback[]         @relation("FeedbackReceiver")
+  messages          Message[]          @relation("MessageSender")
+}
+
+model Student {
+  id                Int                @id @default(autoincrement())
+  user              User               @relation(fields: [userId], references: [id])
+  userId            Int                @unique
+  learningGoals     String?
+  preferredSubjects Subject[]          @relation("StudentPreferredSubjects")
+  sessionRequests   SessionRequest[]   @relation("StudentSessions")
+  sessions          Session[]          @relation("SessionStudents")
+}
+
+model Tutor {
+  id                Int                @id @default(autoincrement())
+  user              User               @relation(fields: [userId], references: [id])
+  userId            Int                @unique
+  subjects          Subject[]          @relation("TutorSubjects")
+  location          String?
+  availability      Json?
+  isVerified        Boolean            @default(false)
+  careerStatus      String             @default("pending")
+  verificationDocument Bytes?
+  mcqTestScore      Int?
+  sessionRequests   SessionRequest[]   @relation("TutorSessions")
+  sessions          Session[]          @relation("SessionTutor")
+}
+
+model Admin {
+  id       Int      @id @default(autoincrement())
+  user     User     @relation(fields: [userId], references: [id])
+  userId   Int      @unique
+}
+
+model Subject {
+  id                Int                @id @default(autoincrement())
+  name              String             @unique
+  tutors            Tutor[]            @relation("TutorSubjects")
+  students          Student[]          @relation("StudentPreferredSubjects")
+  sessionRequests   SessionRequest[]   // Add this relation field
+}
+
+model SessionRequest {
+  id            Int            @id @default(autoincrement())
+  student       Student        @relation("StudentSessions", fields: [studentId], references: [id])
+  studentId     Int
+  tutor         Tutor          @relation("TutorSessions", fields: [tutorId], references: [id])
+  tutorId       Int
+  subject       Subject        @relation(fields: [subjectId], references: [id])
+  subjectId     Int
+  content       String
+  requestedTime DateTime
+  status        String         @default("pending") // "pending", "accepted", "declined"
+  feedback      Feedback?
+  session       Session?       @relation("SessionRequestToSession")
+  sessionId     Int?           @unique
+}
+
+model Feedback {
+  id              Int            @id @default(autoincrement())
+  session         SessionRequest @relation(fields: [sessionRequestId], references: [id])
+  sessionRequestId Int           @unique
+  from            User           @relation("FeedbackGiver", fields: [fromId], references: [id])
+  fromId          Int
+  to              User           @relation("FeedbackReceiver", fields: [toId], references: [id])
+  toId            Int
+  rating          Int
+  comments        String?
+}
+
+model Session {
+  id             Int             @id @default(autoincrement())
+  tutor          Tutor           @relation("SessionTutor", fields: [tutorId], references: [id])
+  tutorId        Int
+  students       Student[]       @relation("SessionStudents")
+  sessionRequest SessionRequest? @relation("SessionRequestToSession", fields: [sessionRequestId], references: [id])
+  sessionRequestId Int?          @unique
+  createdAt      DateTime        @default(now())
+  messages       Message[]
+}
+
+model Message {
+  id         Int       @id @default(autoincrement())
+  session    Session   @relation(fields: [sessionId], references: [id])
+  sessionId  Int
+  sender     User      @relation("MessageSender", fields: [senderId], references: [id])
+  senderId   Int
+  content    String
+  createdAt  DateTime  @default(now())
+}
