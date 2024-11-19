@@ -8,6 +8,9 @@ sudo systemctl enable mysql
 # 3. Access MySQL as root user
 sudo mysql -u root -p
 
+# For window 10 you can use the command:
+sudo mysql for non-root user 
+
 # 4. Inside MySQL terminal, run the following commands:
 
 # 4.1 Create a new MySQL user
