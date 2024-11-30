@@ -1,40 +1,224 @@
-# 1. Install MySQL (for WSL or Linux users)
-sudo apt install mysql-server
+---
 
-# 2. Start and enable the MySQL service
-sudo systemctl start mysql
-sudo systemctl enable mysql
+# Edu Connect
 
-# 3. Access MySQL as root user
-sudo mysql -u root -p
+Edu Connect is a full-stack web application designed to connect students with tutors for seamless online learning sessions.  
 
-# For window 10 you can use the command:
-sudo mysql for non-root user 
+---
 
-# 4. Inside MySQL terminal, run the following commands:
+## 🏗️ Project Structure  
 
-# 4.1 Create a new MySQL user
-CREATE USER 'edu_connect_user'@'localhost' IDENTIFIED BY 'your_password';
+```
+edu-connect/
+├── client/          # React frontend
+├── server/          # Node.js backend
+└── backup.sql       # Database backup
+```  
 
-# 4.2 Create a new database
-CREATE DATABASE edu_connect_db;
+---
 
-# 4.3 Grant all privileges to the user on the new database
-GRANT ALL PRIVILEGES ON edu_connect_db.* TO 'edu_connect_user'@'localhost';
+## ⚙️ Prerequisites  
 
-# 4.4 Grant global privileges for the user (to allow creating shadow databases)
-GRANT ALL PRIVILEGES ON *.* TO 'edu_connect_user'@'localhost';
+- **Node.js** (v14 or higher)  
+- **MySQL** (v8.0 or higher)  
+- **npm** or **yarn**  
 
-# 4.5 Flush privileges to apply the changes
-FLUSH PRIVILEGES;
+---
 
-# 5. Exit MySQL terminal
-EXIT;
+## 🚀 Quick Start  
 
-# 6. Update your .env file in the client directory (example content)
-# DATABASE_URL="mysql://edu_connect_user:your_password@localhost:3306/edu_connect_db"
+### 1. Clone the Repository  
 
-# 7. Install Prisma and migrate the database
+```bash
+git clone https://github.com/ShahzebFaisal5649/DB_Lab_Project.git
+cd DB_Lab_Project
+```  
+
+### 2. Install Dependencies  
+
+```bash
+# Install root dependencies
+npm install
+
+# Install client dependencies
 cd client
-npm install prisma @prisma/client
-npx prisma migrate dev --name init
+npm install
+
+# Install server dependencies
+cd ../server
+npm install
+```  
+
+### 3. Set Up the Database  
+
+- Create a MySQL database named `edu_connect_db`.  
+- Import the schema from `backup.sql`.  
+- Configure database credentials in the `.env` file.  
+
+### 4. Start the Application  
+
+```bash
+# Start all services (from the root directory)
+npm run dev
+```  
+
+---
+
+## 🌟 Features  
+
+- **User Authentication and Authorization**  
+- **Real-Time Chat Functionality**  
+- **Session Management**  
+- **User Profiles with Ratings and Reviews**  
+- **Subject-Based Tutor Matching**  
+- **Admin Dashboard for Management**  
+
+---
+
+## 🛠️ Technology Stack  
+
+**Frontend**: React, TypeScript, Tailwind CSS  
+**Backend**: Node.js, Express, WebSocket  
+**Database**: MySQL  
+
+---
+
+## 📄 Contributing  
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get involved.  
+
+---
+
+## 📜 License  
+
+This project is licensed under the [MIT License](LICENSE).  
+
+---
+
+# 📱 Client Documentation  
+
+## 🖥️ Overview  
+
+The client-side of Edu Connect is a responsive and interactive web application built with modern technologies for an engaging user experience.  
+
+### 🧰 Key Technologies  
+
+- React (v18)  
+- TypeScript  
+- Tailwind CSS  
+- shadcn/ui components  
+- WebSocket for real-time updates  
+
+### 📁 Project Structure  
+
+```
+client/
+├── src/
+│   ├── components/     # Reusable React components
+│   ├── lib/            # Utility functions
+│   └── App.tsx         # Main application component
+```  
+
+### 🔧 Available Scripts  
+
+```bash
+npm start       # Start development server
+npm run build   # Create production build
+npm test        # Run tests
+```  
+
+### 🛠️ Environment Setup  
+
+Create a `.env` file in the `client` directory with the following variables:  
+
+```env
+REACT_APP_API_URL=http://localhost:5000
+REACT_APP_WS_URL=ws://localhost:5001
+```  
+
+### 🔍 Component Structure  
+
+- `components/ui/`: Reusable UI components  
+- `components/*.tsx`: Feature-specific components  
+
+---
+
+# 🖥️ Server Documentation  
+
+## 🖥️ Overview  
+
+The server-side provides RESTful API endpoints and WebSocket functionality for real-time communication between users.  
+
+### 🧰 Key Technologies  
+
+- Node.js  
+- Express.js  
+- MySQL  
+- WebSocket (ws)  
+
+### 📁 Project Structure  
+
+```
+server/
+├── routes/           # API route definitions
+├── middleware/       # Custom middleware
+├── prisma/           # Database schema and migrations
+└── websocket-server.js  # WebSocket logic
+```  
+
+### 🛠️ Environment Setup  
+
+Create a `.env` file in the `server` directory with the following variables:  
+
+```env
+DB_HOST=localhost
+DB_USER=edu_connect_user
+DB_PASSWORD=your_password
+DB_NAME=edu_connect_db
+EXPRESS_PORT=5000
+WS_PORT=5001
+```  
+
+### 🔗 API Endpoints  
+
+#### **Authentication**  
+- `POST /api/users/login`  
+- `POST /api/users/register`  
+
+#### **Sessions**  
+- `GET /api/users/sessions`  
+- `POST /api/users/session/request`  
+- `PUT /api/users/session/:id/respond`  
+
+#### **Profiles**  
+- `GET /api/users/profile/:id`  
+- `PUT /api/users/profile/:id`  
+
+#### **Admin Routes**  
+- `GET /api/users/admin/users`  
+- `PUT /api/users/admin/users/:id/verify`  
+
+---
+
+## 📊 Database Schema  
+
+The application uses MySQL with the following main tables:  
+
+- **User**  
+- **Student**  
+- **Tutor**  
+- **Session**  
+- **SessionRequest**  
+- **Message**  
+- **Subject**  
+- **Feedback**  
+
+---
+
+## 📡 WebSocket Events  
+
+- **join**: Join a session  
+- **chat**: Send/receive messages  
+- **error**: Handle errors  
+
+---
