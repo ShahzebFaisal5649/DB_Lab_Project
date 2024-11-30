@@ -59,7 +59,8 @@ npm install
 
 ```bash
 # Start all services (from the root directory)
-npm run dev
+npm start #In client directory
+node server.js #In server directory
 ```  
 
 ---
@@ -80,12 +81,6 @@ npm run dev
 **Frontend**: React, TypeScript, Tailwind CSS  
 **Backend**: Node.js, Express, WebSocket  
 **Database**: MySQL  
-
----
-
-## 📄 Contributing  
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to get involved.  
 
 ---
 
