@@ -6,6 +6,7 @@ import { Card, CardContent } from './ui/card';
 import { ScrollArea } from "./ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
 import { Send } from "lucide-react"
+import { toast } from 'react-hot-toast';
 
 interface Message {
   id: number;
@@ -25,116 +26,152 @@ const SessionRequests: React.FC = () => {
   const ws = useRef<WebSocket | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const userIdFromStorage = localStorage.getItem('userId');
-        if (!userIdFromStorage) {
-          console.error('User ID not found in localStorage');
-          return;
-        }
+  // In SessionRequests.tsx, update the useEffect:
 
-        const userResponse = await fetch('http://localhost:5000/api/users/current', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'user-id': userIdFromStorage,
-          },
-        });
-
-        if (!userResponse.ok) {
-          const errorData = await userResponse.json();
-          console.error('Failed to fetch current user:', errorData.message);
-          return;
-        }
-
-        const userData = await userResponse.json();
-        setUserId(userData.user.id);
-        setUserName(userData.user.name);
-
-        const messagesResponse = await fetch(`http://localhost:5000/api/users/sessions/${sessionId}/messages`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'user-id': userIdFromStorage,
-          },
-        });
-
-        if (!messagesResponse.ok) {
-          const errorData = await messagesResponse.json();
-          console.error('Failed to fetch messages:', errorData.message);
-          return;
-        }
-
-        const messagesData = await messagesResponse.json();
-        setMessages(messagesData || []);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setIsLoading(false);
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const userIdFromStorage = localStorage.getItem('userId');
+      if (!userIdFromStorage) {
+        console.error('User ID not found in localStorage');
+        return;
       }
-    };
 
-    fetchData();
-
-    ws.current = new WebSocket(`ws://localhost:5001`);
-    
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
-      ws.current?.send(JSON.stringify({ type: 'join', sessionId }));
-    };
-
-    ws.current.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'chat') {
-        setMessages((prevMessages) => [...prevMessages, message]);
-      }
-    };
-
-    ws.current.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    ws.current.onclose = () => {
-      console.log('WebSocket connection closed');
-    };
-
-    return () => {
-      ws.current?.close();
-    };
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const sendMessage = () => {
-    if (newMessage.trim() && ws.current?.readyState === WebSocket.OPEN && sessionId) {
-      const message = {
-        type: 'chat',
-        sessionId: parseInt(sessionId),
-        content: newMessage,
-        senderId: userId,
-        senderName: userName,
-      };
-      ws.current.send(JSON.stringify(message));
-      setNewMessage('');
-
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        {
-          id: Date.now(),
-          content: message.content,
-          senderId: message.senderId!,
-          senderName: message.senderName,
-          createdAt: new Date().toISOString(),
+      const userResponse = await fetch('http://localhost:5000/api/users/current', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'user-id': userIdFromStorage,
         },
-      ]);
+      });
+
+      if (!userResponse.ok) {
+        const errorData = await userResponse.json();
+        console.error('Failed to fetch current user:', errorData.message);
+        return;
+      }
+
+      const userData = await userResponse.json();
+      setUserId(userData.user.id);
+      setUserName(userData.user.name);
+
+      const messagesResponse = await fetch(`http://localhost:5000/api/users/sessions/${sessionId}/messages`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'user-id': userIdFromStorage,
+        },
+      });
+
+      if (!messagesResponse.ok) {
+        const errorData = await messagesResponse.json();
+        console.error('Failed to fetch messages:', errorData.message);
+        return;
+      }
+
+      const messagesData = await messagesResponse.json();
+      setMessages(messagesData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const setupWebSocket = () => {
+    // Close existing connection if any
+    if (ws.current) {
+      ws.current.close();
+    }
+
+    // Create new WebSocket connection
+    try {
+      ws.current = new WebSocket('ws://localhost:5000');
+      
+      ws.current.onopen = () => {
+        console.log('WebSocket Connected');
+        if (sessionId) {
+          ws.current?.send(JSON.stringify({ 
+            type: 'join', 
+            sessionId: parseInt(sessionId)
+          }));
+        }
+      };
+
+      ws.current.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          console.log('Received message:', message);
+          
+          if (message.type === 'chat') {
+            setMessages(prevMessages => [...prevMessages, message]);
+          } else if (message.type === 'error') {
+            console.error('Server error:', message.message);
+            toast.error(message.message);
+          }
+        } catch (error) {
+          console.error('Error processing message:', error);
+        }
+      };
+
+      ws.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.current.onclose = () => {
+        console.log('WebSocket connection closed');
+      };
+    } catch (error) {
+      console.error('Error setting up WebSocket:', error);
+    }
+  };
+
+  // Initial data fetch
+  fetchData();
+  
+  // Setup WebSocket connection
+  setupWebSocket();
+
+  // Cleanup function
+  return () => {
+    if (ws.current) {
+      ws.current.close();
+    }
+  };
+}, [sessionId]);
+
+useEffect(() => {
+  if (scrollAreaRef.current) {
+    scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+  }
+}, [messages]);
+
+// Update sendMessage function
+const sendMessage = () => {
+  if (!newMessage.trim()) return;
+
+  if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+    toast.error('Connection lost. Please try again.');
+    return;
+  }
+
+  try {
+    const message = {
+      type: 'chat',
+      sessionId: parseInt(sessionId as string),
+      content: newMessage,
+      senderId: userId,
+      senderName: userName,
+    };
+
+    ws.current.send(JSON.stringify(message));
+    setNewMessage('');
+  } catch (error) {
+    console.error('Error sending message:', error);
+    toast.error('Failed to send message');
+  }
+};
 
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
