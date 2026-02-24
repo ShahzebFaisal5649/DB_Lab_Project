@@ -61,7 +61,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
 
   const fetchSubjects = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL} /api/users / subjects`);
+      const response = await axios.get(`${API_BASE_URL}/api/users/subjects`);
       if (response.data && response.data.subjects) {
         setSubjects(response.data.subjects);
       }
@@ -109,7 +109,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL} /api/users / register`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
@@ -127,12 +127,13 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
         navigate('/dashboard');
       } else {
         setSuccessMessage(null);
-        setErrorMessage(data.message || 'Registration failed');
+        setErrorMessage(data.message || `Registration failed (Status: ${response.status})`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error registering user:', error);
+      console.log('Attempted API URL:', `${API_BASE_URL}/api/users/register`);
       setSuccessMessage(null);
-      setErrorMessage('An error occurred during registration.');
+      setErrorMessage(`Network error or unreachable backend. Error: ${error.message}. API: ${API_BASE_URL}`);
     }
   };
 

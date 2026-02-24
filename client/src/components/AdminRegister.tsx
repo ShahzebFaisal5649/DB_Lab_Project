@@ -46,15 +46,16 @@ const AdminRegister: React.FC = () => {
         setErrorMessage(null);
         setTimeout(() => {
           navigate('/admin/login');
-        }, 2000); // Redirect after 2 seconds
+        }, 2000);
       } else {
         setSuccessMessage(null);
-        setErrorMessage(data.message || 'Registration failed');
+        setErrorMessage(data.message || `Registration failed (Status: ${response.status})`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error registering admin:', error);
+      console.log('Attempted API URL:', `${API_BASE_URL}/api/users/register`);
       setSuccessMessage(null);
-      setErrorMessage('An error occurred during registration. Please ensure the backend is live and reachable.');
+      setErrorMessage(`Network error or backend unreachable. Error: ${error.message}. API: ${API_BASE_URL}`);
     }
   };
 
