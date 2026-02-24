@@ -8,7 +8,7 @@ import { Input } from './ui/input';
 import { Label } from "./ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CalendarDays, MessageSquare, User, LogOut, Search, Upload, Star, Badge } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import toast, { Toaster } from 'react-hot-toast';
 import { Textarea } from './ui/textarea';
