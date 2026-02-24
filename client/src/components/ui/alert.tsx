@@ -40,9 +40,8 @@ const AlertTitle = React.forwardRef<
     ref={ref}
     className={cn("mb-1 font-medium leading-none tracking-tight", className)}
     {...props}
-    aria-label={typeof props.children === 'string' ? props.children : "Alert Title"}
   >
-    {props.children || <span className="sr-only">Notice</span>}
+    {props.children || "Alert"}
   </h5>
 ))
 AlertTitle.displayName = "AlertTitle"

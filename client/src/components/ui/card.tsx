@@ -40,9 +40,8 @@ const CardTitle = React.forwardRef<
       className
     )}
     {...props}
-    aria-label={typeof props.children === 'string' ? props.children : "Card Title"}
   >
-    {props.children || <span className="sr-only">Card Title</span>}
+    {props.children || "Card Title"}
   </h3>
 ))
 CardTitle.displayName = "CardTitle"

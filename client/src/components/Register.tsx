@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
