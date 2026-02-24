@@ -1,5 +1,5 @@
 # Root Dockerfile for Hugging Face monorepo support
-FROM node:22-slim
+FROM node:22
 
 # Install OpenSSL for Prisma
 RUN apt-get update -y && apt-get install -y openssl
@@ -31,4 +31,4 @@ EXPOSE 7860
 ENV PORT=7860
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

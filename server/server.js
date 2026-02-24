@@ -35,6 +35,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
 // Create HTTP server
 const server = http.createServer(app);
 
