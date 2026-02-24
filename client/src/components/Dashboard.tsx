@@ -1,4 +1,5 @@
 // frontend/src/components/Dashboard.tsx
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { ReactNode, useEffect, useState } from 'react';
 import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import toast, { Toaster } from 'react-hot-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
+import { Label } from '@radix-ui/react-label';
 
 interface DashboardProps {
   setIsLoggedIn: (value: boolean) => void;
