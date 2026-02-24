@@ -34,6 +34,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  next();
+});
+
 // Health check route
 app.get('/health', async (req, res) => {
   try {

@@ -82,7 +82,7 @@ router.put('/admin/users/:userId/verify', async (req, res) => {
   try {
     const { userId } = req.params;
     const { isVerified } = req.body;
-    
+
     // First check if user exists and is a tutor
     const [tutors] = await conn.execute(`
       SELECT t.id 
@@ -102,7 +102,7 @@ router.put('/admin/users/:userId/verify', async (req, res) => {
       [isVerified, userId]
     );
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: `Tutor ${isVerified ? 'verified' : 'unverified'} successfully`,
       userId,
       isVerified
@@ -178,7 +178,7 @@ router.post('/login', async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { email, password } = req.body;
-    
+
     const [users] = await conn.execute(
       'SELECT * FROM `User` WHERE email = ?',
       [email]
@@ -190,7 +190,7 @@ router.post('/login', async (req, res) => {
 
     const user = users[0];
     const isMatch = await bcrypt.compare(password, user.password);
-    
+
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid email or password' });
     }
@@ -261,7 +261,7 @@ router.post('/register', async (req, res) => {
         'INSERT INTO `Student` (userId, learningGoals) VALUES (?, ?)',
         [userId, learningGoals || null]
       );
-      
+
       const studentId = studentResult.insertId;
 
       // Handle preferred subjects
@@ -292,7 +292,7 @@ router.post('/register', async (req, res) => {
         'INSERT INTO `Tutor` (userId, location, availability) VALUES (?, ?, ?)',
         [userId, location || null, JSON.stringify(availability) || null]
       );
-      
+
       const tutorId = tutorResult.insertId;
 
       // Handle tutor subjects
@@ -318,6 +318,11 @@ router.post('/register', async (req, res) => {
           [tutorId, subjectId]
         );
       }
+    } else if (role === 'ADMIN') {
+      await conn.execute(
+        'INSERT INTO `Admin` (userId) VALUES (?)',
+        [userId]
+      );
     }
 
     await conn.commit();
@@ -450,7 +455,7 @@ router.get('/debug/tutor/:id', async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const userId = parseInt(req.params.id);
-    
+
     const [rawData] = await conn.execute(`
       SELECT 
         t.*,
@@ -464,7 +469,7 @@ router.get('/debug/tutor/:id', async (req, res) => {
 
     if (rawData.length > 0) {
       const tutorData = rawData[0];
-      res.status(200).json({ 
+      res.status(200).json({
         rawData: tutorData,
         availabilityType: typeof tutorData.availability,
         isArray: Array.isArray(tutorData.availability),
@@ -620,9 +625,9 @@ router.put('/profile/:id', async (req, res) => {
       [userId]
     );
 
-    res.status(200).json({ 
-      message: 'Profile updated successfully', 
-      user: updatedUser[0] 
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      user: updatedUser[0]
     });
   } catch (error) {
     await conn.rollback();
@@ -706,7 +711,7 @@ router.get('/session-requests', async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { role, userId } = req.query;
-    
+
     let sql, params;
 
     if (role === 'ADMIN') {
@@ -827,9 +832,9 @@ router.put('/session/:id/respond', async (req, res) => {
         'INSERT INTO Session (tutorId, sessionRequestId) VALUES (?, ?)',
         [sessionRequest.tutorId, sessionRequestId]
       );
-      
+
       const sessionId = sessionResult.insertId;
-      
+
       // Add student to session
       await conn.execute(
         'INSERT INTO _SessionStudents (A, B) VALUES (?, ?)',
@@ -853,8 +858,8 @@ router.put('/session/:id/respond', async (req, res) => {
 
     await conn.commit();
     res.status(200).json({
-      message: status === 'accepted' ? 
-        'Session request accepted and session created' : 
+      message: status === 'accepted' ?
+        'Session request accepted and session created' :
         'Session request declined',
       sessionRequest: {
         id: sessionRequest.id,
@@ -940,7 +945,7 @@ router.get('/sessions/:userId', async (req, res) => {
     const formattedSessions = sessions.map(session => {
       const studentIds = session.studentIds.split(',');
       const studentNames = session.studentNames.split(',');
-      
+
       return {
         id: session.id,
         tutor: {
@@ -1371,13 +1376,13 @@ router.get('/feedbacks', async (req, res) => {
 
     const formattedFeedbacks = feedbacks.map(feedback => ({
       id: feedback.id,
-      from: { 
-        name: feedback.fromName, 
-        role: feedback.fromRole 
+      from: {
+        name: feedback.fromName,
+        role: feedback.fromRole
       },
-      to: { 
-        name: feedback.toName, 
-        role: feedback.toRole 
+      to: {
+        name: feedback.toName,
+        role: feedback.toRole
       },
       rating: feedback.rating,
       comments: feedback.comments
@@ -1548,7 +1553,7 @@ router.get('/search', async (req, res) => {
     }
 
     const [results] = await conn.execute(sql, params);
-    
+
     // Format results
     const formattedResults = await Promise.all(results.map(async (user) => {
       let formattedUser = {
@@ -1566,9 +1571,9 @@ router.get('/search', async (req, res) => {
           JOIN Tutor t ON ts.A = t.id
           WHERE t.userId = ?
         `, [user.id]);
-        
+
         formattedUser.subjects = subjects.map(s => ({ name: s.name }));
-        
+
         // Parse availability if it exists
         try {
           formattedUser.availability = user.availability ? JSON.parse(user.availability) : null;
@@ -1585,7 +1590,7 @@ router.get('/search', async (req, res) => {
           JOIN Student st ON sps.A = st.id
           WHERE st.userId = ?
         `, [user.id]);
-        
+
         formattedUser.preferredSubjects = preferredSubjects.map(s => ({ name: s.name }));
       }
 
