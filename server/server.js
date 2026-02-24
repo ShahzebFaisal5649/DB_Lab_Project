@@ -18,11 +18,15 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV !== 'development') {
-      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+
+    // Normalize origins for comparison
+    const normalizedOrigin = origin.replace(/\/$/, "");
+    const isAllowed = allowedOrigins.some(ao => ao && ao.replace(/\/$/, "") === normalizedOrigin);
+
+    if (!isAllowed && process.env.NODE_ENV !== 'development') {
+      console.warn(`CORS blocked for origin: ${origin}`);
+      return callback(new Error('CORS policy violation'), false);
     }
     return callback(null, true);
   },
@@ -31,8 +35,22 @@ app.use(cors({
 app.use(express.json());
 
 // Health check route
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    const [result] = await pool.query('SELECT 1');
+    res.status(200).json({
+      status: 'ok',
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 app.get('/ping', (req, res) => {
