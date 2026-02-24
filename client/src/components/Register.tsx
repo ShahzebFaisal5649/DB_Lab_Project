@@ -60,7 +60,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
 
   const fetchSubjects = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/users/subjects`);
+      const response = await axios.get(`${API_BASE_URL} /api/users / subjects`);
       if (response.data && response.data.subjects) {
         setSubjects(response.data.subjects);
       }
@@ -108,7 +108,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
+      const response = await fetch(`${API_BASE_URL} /api/users / register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),
@@ -297,7 +297,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
                     {days.map((day) => (
                       <Select key={day} onValueChange={(time) => handleAvailabilityChange(day, time)}>
                         <SelectTrigger>
-                          <SelectValue placeholder={`${day}`} />
+                          <SelectValue placeholder={`${day} `} />
                         </SelectTrigger>
                         <SelectContent>
                           {times.map((time) => (
@@ -311,7 +311,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
                   {/* Display Selected Availabilities with Remove Option */}
                   <div className="mt-4 space-y-2">
                     {availability.map(({ day, time }) => (
-                      <div key={`${day}-${time}`} className="flex justify-between items-center">
+                      <div key={`${day} -${time} `} className="flex justify-between items-center">
                         <span>{day}, {time}</span>
                         <Button variant="outline" onClick={() => removeAvailability(day, time)}>
                           Remove

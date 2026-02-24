@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
-import { Label } from "./ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CalendarDays, MessageSquare, User, LogOut, Search, Upload, Star, Badge } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "./ui/dialog";
