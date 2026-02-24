@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: edu-connect-backend
+    env: node
+    plan: free # Explicitly use the free tier
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    rootDir: server
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Set this in Render dashboard
+      - key: FRONTEND_URL
+        value: https://edu-connect-frontend-app.vercel.app
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production

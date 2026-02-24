@@ -1,6 +1,7 @@
 // client/src/components/Profile.tsx
 
 import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -52,7 +53,7 @@ const Profile: React.FC<ProfileProps> = ({ userId }) => {
     const fetchProfile = async () => {
       if (userId) {
         try {
-          const response = await fetch(`http://localhost:5000/api/users/profile/${userId}`);
+          const response = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`);
           const data = await response.json();
           if (response.ok) {
             setProfile(data.user);
@@ -82,7 +83,7 @@ const Profile: React.FC<ProfileProps> = ({ userId }) => {
 
   const onSubmit: SubmitHandler<ProfileData> = async (values) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/users/profile/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

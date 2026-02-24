@@ -10,8 +10,30 @@ const { pool } = require('./dbUtils');
 const app = express();
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:3001'
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1 && process.env.NODE_ENV !== 'development') {
+      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(express.json());
+
+// Health check route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -22,7 +44,7 @@ const wss = new WebSocket.Server({ server });
 // WebSocket connection handling
 wss.on('connection', async (ws) => {
   console.log('New WebSocket connection established');
-  
+
   ws.isAlive = true;
   ws.on('pong', () => {
     ws.isAlive = true;
@@ -45,8 +67,8 @@ wss.on('connection', async (ws) => {
 
           if (sessions.length > 0) {
             ws.sessionId = sessionId;
-            ws.send(JSON.stringify({ 
-              type: 'joined', 
+            ws.send(JSON.stringify({
+              type: 'joined',
               sessionId,
               timestamp: new Date().toISOString()
             }));
@@ -56,9 +78,9 @@ wss.on('connection', async (ws) => {
         case 'chat':
           // Handle chat message
           if (!ws.sessionId) {
-            ws.send(JSON.stringify({ 
-              type: 'error', 
-              message: 'Not joined to a session' 
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Not joined to a session'
             }));
             return;
           }
@@ -92,9 +114,9 @@ wss.on('connection', async (ws) => {
       }
     } catch (error) {
       console.error('Error handling message:', error);
-      ws.send(JSON.stringify({ 
-        type: 'error', 
-        message: 'Server error processing message' 
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Server error processing message'
       }));
     } finally {
       conn.release();
@@ -127,7 +149,7 @@ app.use('/api/users', userRoutes);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
+  res.status(500).json({
     message: 'Something broke!',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });

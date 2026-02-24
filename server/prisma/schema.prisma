@@ -24,20 +24,20 @@ model User {
 }
 
 model Student {
-  id                Int                @id @default(autoincrement())
-  user              User               @relation(fields: [userId], references: [id])
-  userId            Int                @unique
+  id                Int                     @id @default(autoincrement())
+  user              User                    @relation(fields: [userId], references: [id])
+  userId            Int                     @unique
   learningGoals     String?
-  preferredSubjects Subject[]          @relation("StudentPreferredSubjects")
-  sessionRequests   SessionRequest[]   @relation("StudentSessions")
-  sessions          Session[]          @relation("SessionStudents")
+  preferredSubjects StudentPreferredSubject[]
+  sessionRequests   SessionRequest[]        @relation("StudentSessions")
+  sessions          SessionStudent[]
 }
 
 model Tutor {
   id                Int                @id @default(autoincrement())
   user              User               @relation(fields: [userId], references: [id])
   userId            Int                @unique
-  subjects          Subject[]          @relation("TutorSubjects")
+  subjects          TutorSubject[]
   location          String?
   availability      Json?
   isVerified        Boolean            @default(false)
@@ -55,11 +55,31 @@ model Admin {
 }
 
 model Subject {
-  id                Int                @id @default(autoincrement())
-  name              String             @unique
-  tutors            Tutor[]            @relation("TutorSubjects")
-  students          Student[]          @relation("StudentPreferredSubjects")
-  sessionRequests   SessionRequest[]   // Add this relation field
+  id                Int                     @id @default(autoincrement())
+  name              String                  @unique
+  tutors            TutorSubject[]
+  students          StudentPreferredSubject[]
+  sessionRequests   SessionRequest[]
+}
+
+model StudentPreferredSubject {
+  A       Int
+  B       Int
+  Student Student @relation(fields: [A], references: [id], onDelete: Cascade)
+  Subject Subject @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@id([A, B])
+  @@map("_StudentPreferredSubjects")
+}
+
+model TutorSubject {
+  A       Int
+  B       Int
+  Subject Subject @relation(fields: [A], references: [id], onDelete: Cascade)
+  Tutor   Tutor   @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@id([A, B])
+  @@map("_TutorSubjects")
 }
 
 model SessionRequest {
@@ -94,11 +114,21 @@ model Session {
   id             Int             @id @default(autoincrement())
   tutor          Tutor           @relation("SessionTutor", fields: [tutorId], references: [id])
   tutorId        Int
-  students       Student[]       @relation("SessionStudents")
+  students       SessionStudent[]
   sessionRequest SessionRequest? @relation("SessionRequestToSession", fields: [sessionRequestId], references: [id])
   sessionRequestId Int?          @unique
   createdAt      DateTime        @default(now())
   messages       Message[]
+}
+
+model SessionStudent {
+  A       Int
+  B       Int
+  Session Session @relation(fields: [A], references: [id], onDelete: Cascade)
+  Student Student @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@id([A, B])
+  @@map("_SessionStudents")
 }
 
 model Message {

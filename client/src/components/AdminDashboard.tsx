@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { API_BASE_URL } from '../config';
 import { Button } from "./ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
@@ -80,7 +81,7 @@ const AdminDashboard: React.FC = () => {
   const fetchTutors = async () => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch('http://localhost:5000/api/users/admin/users?role=TUTOR', {
+      const response = await fetch(`${API_BASE_URL}/api/users/admin/users?role=TUTOR`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -97,11 +98,11 @@ const AdminDashboard: React.FC = () => {
       console.error('Error fetching tutors:', error);
     }
   };
-  
+
   const fetchStudents = async () => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch('http://localhost:5000/api/users/admin/users?role=STUDENT', {
+      const response = await fetch(`${API_BASE_URL}/api/users/admin/users?role=STUDENT`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +119,7 @@ const AdminDashboard: React.FC = () => {
       console.error('Error fetching students:', error);
     }
   };
-  
+
   const fetchSessionRequests = async () => {
     try {
       const userId = localStorage.getItem('userId');
@@ -128,15 +129,15 @@ const AdminDashboard: React.FC = () => {
         alert("Role or User ID missing. Please log in again.");
         return;
       }
-  
-      const response = await fetch(`http://localhost:5000/api/users/session-requests?role=${role}&userId=${userId}`, {
+
+      const response = await fetch(`${API_BASE_URL}/api/users/session-requests?role=${role}&userId=${userId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'user-id': userId,
         },
       });
-  
+
       if (response.ok) {
         const data = await response.json();
         setSessionRequests(data.requests);
@@ -147,12 +148,12 @@ const AdminDashboard: React.FC = () => {
       console.error('Error fetching session requests:', error);
     }
   };
-    
+
 
   const fetchFeedbacks = async () => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch('http://localhost:5000/api/users/feedbacks', {
+      const response = await fetch(`${API_BASE_URL}/api/users/feedbacks`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -169,12 +170,12 @@ const AdminDashboard: React.FC = () => {
       console.error('Error fetching feedbacks:', error);
     }
   };
-  
+
 
   const handleVerify = async (userId: string, isVerified: boolean) => {
     try {
       const authUserId = localStorage.getItem('userId');
-      const response = await fetch(`http://localhost:5000/api/users/admin/users/${userId}/verify`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/admin/users/${userId}/verify`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +183,7 @@ const AdminDashboard: React.FC = () => {
         },
         body: JSON.stringify({ isVerified }),
       });
-  
+
       if (response.ok) {
         setTutors(prevTutors =>
           prevTutors.map(tutor =>
@@ -197,11 +198,11 @@ const AdminDashboard: React.FC = () => {
       console.error('Error updating user verification status:', error);
     }
   };
-  
+
   const viewVerificationDocument = (userId: string) => {
     const authUserId = localStorage.getItem('userId');
-    const url = `http://localhost:5000/api/users/admin/verification-document/${userId}`;
-    
+    const url = `${API_BASE_URL}/api/users/admin/verification-document/${userId}`;
+
     fetch(url, {
       method: 'GET',
       headers: {
@@ -223,11 +224,11 @@ const AdminDashboard: React.FC = () => {
         // Handle the error appropriately
       });
   };
-  
+
   const fetchSubjects = async () => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch('http://localhost:5000/api/users/subjects', {
+      const response = await fetch(`${API_BASE_URL}/api/users/subjects`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -243,12 +244,12 @@ const AdminDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error fetching subjects:', error);
     }
-  };  
+  };
 
   const addSubject = async () => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch('http://localhost:5000/api/users/subjects', {
+      const response = await fetch(`${API_BASE_URL}/api/users/subjects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,12 +267,12 @@ const AdminDashboard: React.FC = () => {
       console.error('Error adding subject:', error);
     }
   };
-  
+
 
   const deleteSubject = async (subjectId: string) => {
     try {
       const userId = localStorage.getItem('userId');
-      const response = await fetch(`http://localhost:5000/api/users/subjects/${subjectId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/subjects/${subjectId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -286,7 +287,7 @@ const AdminDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error deleting subject:', error);
     }
-  };  
+  };
 
   const filteredTutors = tutors.filter(tutor =>
     tutor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

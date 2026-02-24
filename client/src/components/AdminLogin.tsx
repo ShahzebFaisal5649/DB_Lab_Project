@@ -1,6 +1,7 @@
 // client/src/components/Login.tsx
 
 import React from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,7 +40,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ setIsLoggedIn, setUserRole, set
 
   const onSubmit: SubmitHandler<FormData> = async (values) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/login', {
+      const response = await fetch(`${API_BASE_URL}/api/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

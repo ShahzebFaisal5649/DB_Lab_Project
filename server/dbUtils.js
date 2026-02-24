@@ -3,16 +3,18 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 // Create connection pool
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'edu_connect_user',
+const poolConfig = process.env.DATABASE_URL || {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'edu_connect_user',
   password: process.env.DB_PASSWORD || 'your_password',
-  database: 'edu_connect_db',
+  database: process.env.DB_NAME || 'edu_connect_db',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   multipleStatements: true
-});
+};
+
+const pool = mysql.createPool(poolConfig);
 
 // Generic query executor
 async function executeQuery(sql, params = []) {

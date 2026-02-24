@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -60,7 +61,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
 
   const fetchSubjects = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/users/subjects');
+      const response = await axios.get(`${API_BASE_URL}/api/users/subjects`);
       if (response.data && response.data.subjects) {
         setSubjects(response.data.subjects);
       }
@@ -108,7 +109,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/users/register', {
+      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData),

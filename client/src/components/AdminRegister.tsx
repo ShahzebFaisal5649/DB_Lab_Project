@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,7 +34,7 @@ const AdminRegister: React.FC = () => {
 
   const onSubmit: SubmitHandler<FormData> = async (values) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/register', {
+      const response = await fetch(`${API_BASE_URL}/api/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...values, role: 'ADMIN' }), // Set role to 'ADMIN'
@@ -53,7 +54,7 @@ const AdminRegister: React.FC = () => {
     } catch (error) {
       console.error('Error registering admin:', error);
       setSuccessMessage(null);
-      setErrorMessage('An error occurred during registration.');
+      setErrorMessage('An error occurred during registration. Please ensure the backend is live and reachable.');
     }
   };
 
@@ -61,7 +62,7 @@ const AdminRegister: React.FC = () => {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 rounded-xl bg-white shadow-lg">
         <h1 className="text-3xl font-bold text-center">Admin Registration</h1>
-        
+
         {/* Display success or error message */}
         {successMessage && <Alert variant="default">{successMessage}</Alert>}
         {errorMessage && <Alert variant="destructive">{errorMessage}</Alert>}

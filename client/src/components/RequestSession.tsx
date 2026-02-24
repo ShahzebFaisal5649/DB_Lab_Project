@@ -1,6 +1,7 @@
 // client/src/components/RequestSession.tsx
 
 import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useForm, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -46,7 +47,7 @@ const RequestSession: React.FC<RequestSessionProps> = ({ userId }) => {
   useEffect(() => {
     const fetchTutors = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/users/tutors');
+        const response = await fetch(`${API_BASE_URL}/api/users/tutors`);
         const data = await response.json();
         if (response.ok) {
           setTutors(data.tutors);
@@ -67,7 +68,7 @@ const RequestSession: React.FC<RequestSessionProps> = ({ userId }) => {
   // Handle form submission
   const onSubmit: SubmitHandler<SessionRequestData> = async (values) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/session/request', {
+      const response = await fetch(`${API_BASE_URL}/api/users/session/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...values, studentId: userId }),

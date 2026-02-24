@@ -1,5 +1,6 @@
 // frontend/src/components/Dashboard.tsx
 import React, { ReactNode, useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -100,7 +101,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
   const fetchSubjects = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/subjects');
+      const response = await fetch(`${API_BASE_URL}/api/users/subjects`);
       const data = await response.json();
       if (response.ok) {
         setSubjects(data.subjects);
@@ -122,7 +123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
       if (userId) {
         try {
           // Fetch user profile
-          const profileResponse = await fetch(`http://localhost:5000/api/users/profile/${userId}`);
+          const profileResponse = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`);
           const profileData = await profileResponse.json();
           if (!profileResponse.ok) {
             throw new Error(profileData.message || 'Failed to fetch profile');
@@ -142,7 +143,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
           toast.success('Profile loaded successfully');
 
           // Fetch sessions
-          const sessionResponse = await fetch(`http://localhost:5000/api/users/sessions/${userId}`);
+          const sessionResponse = await fetch(`${API_BASE_URL}/api/users/sessions/${userId}`);
           const sessionData = await sessionResponse.json();
           if (!sessionResponse.ok) {
             throw new Error(sessionData.message || 'Failed to fetch sessions');
@@ -163,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
     const fetchSessionRequests = async () => {
       try {
         const response = await fetch(
-          `http://localhost:5000/api/users/session-requests?role=${userRole}&userId=${userId}`
+          `${API_BASE_URL}/api/users/session-requests?role=${userRole}&userId=${userId}`
         );
         if (response.ok) {
           const data = await response.json();
@@ -207,7 +208,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/users/search?query=${encodeURIComponent(mainSearchQuery)}&role=${userRole}`
+        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(mainSearchQuery)}&role=${userRole}`
       );
       const data = await response.json();
       if (response.ok) {
@@ -233,7 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
       // For tutors, we always want to search for students
       const searchRole = userRole === 'TUTOR' ? 'STUDENT' : 'TUTOR';
       const response = await fetch(
-        `http://localhost:5000/api/users/search?query=${encodeURIComponent(sessionSearchQuery)}&role=${searchRole}`
+        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(sessionSearchQuery)}&role=${searchRole}`
       );
       const data = await response.json();
       if (response.ok) {
@@ -265,7 +266,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
       });
 
       // Fetch updated subjects for the selected tutor
-      const response = await fetch(`http://localhost:5000/api/users/subjects`);
+      const response = await fetch(`${API_BASE_URL}/api/users/subjects`);
       const data = await response.json();
       if (response.ok) {
         setSubjects(data.subjects);
@@ -312,7 +313,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/users/session/request', {
+      const response = await fetch(`${API_BASE_URL}/api/users/session/request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -346,7 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
 
       // Refresh session requests list
       const refreshedRequests = await fetch(
-        `http://localhost:5000/api/users/session-requests?role=${userRole}&userId=${userId}`
+        `${API_BASE_URL}/api/users/session-requests?role=${userRole}&userId=${userId}`
       );
       if (refreshedRequests.ok) {
         const refreshedData = await refreshedRequests.json();
@@ -368,7 +369,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/users/session/${sessionRequestId}/respond`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/session/${sessionRequestId}/respond`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -410,13 +411,13 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
         toast.error('Please select a session');
         return;
       }
-  
+
       if (!feedbackForm.rating) {
         toast.error('Please provide a rating');
         return;
       }
-  
-      const response = await fetch(`http://localhost:5000/api/users/session/${feedbackForm.sessionId}/feedback`, {
+
+      const response = await fetch(`${API_BASE_URL}/api/users/session/${feedbackForm.sessionId}/feedback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -427,7 +428,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
           fromId: parseInt(userId as string), // Student's user ID
         }),
       });
-  
+
       const data = await response.json();
       if (response.ok) {
         toast.success('Feedback submitted successfully');
@@ -450,7 +451,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
 
   const handleCreateSession = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/sessions', {
+      const response = await fetch(`${API_BASE_URL}/api/users/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -478,7 +479,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
 
   const handleDeleteSession = async (sessionId: number) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/users/sessions/${sessionId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/sessions/${sessionId}`, {
         method: 'DELETE',
       });
 
@@ -504,7 +505,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
     if (!editedProfile) return;
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/profile/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -534,7 +535,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }
     formData.append('document', file);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/upload-verification/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/upload-verification/${userId}`, {
         method: 'POST',
         body: formData,
       });
