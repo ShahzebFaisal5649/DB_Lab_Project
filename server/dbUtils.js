@@ -11,7 +11,10 @@ const poolConfig = process.env.DATABASE_URL || {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  multipleStatements: true
+  multipleStatements: true,
+  ssl: {
+    rejectUnauthorized: false
+  }
 };
 
 const pool = mysql.createPool(poolConfig);
