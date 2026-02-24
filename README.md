@@ -1,4 +1,12 @@
 ---
+title: Edu Connect Backend
+emoji: 🎓
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
 
 # Edu Connect
 
@@ -215,5 +223,3 @@ The application uses MySQL with the following main tables:
 - **join**: Join a session  
 - **chat**: Send/receive messages  
 - **error**: Handle errors  
-
----
