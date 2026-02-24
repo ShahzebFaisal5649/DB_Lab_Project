@@ -16,6 +16,8 @@ const allowedOrigins = [
   'http://localhost:3001'
 ].filter(Boolean);
 
+console.log('Allowed Origins:', allowedOrigins);
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
@@ -25,7 +27,7 @@ app.use(cors({
     const isAllowed = allowedOrigins.some(ao => ao && ao.replace(/\/$/, "") === normalizedOrigin);
 
     if (!isAllowed && process.env.NODE_ENV !== 'development') {
-      console.warn(`CORS blocked for origin: ${origin}`);
+      console.warn(`CORS blocked for origin: "${origin}". Normalized: "${normalizedOrigin}"`);
       return callback(new Error('CORS policy violation'), false);
     }
     return callback(null, true);
@@ -36,7 +38,8 @@ app.use(express.json());
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.headers.origin}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`Origin: ${req.headers.origin} | Content-Type: ${req.headers['content-type']}`);
   next();
 });
 
