@@ -1,17 +1,25 @@
-import React, { ReactNode, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../config';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { CalendarDays, MessageSquare, User, LogOut, Search, Upload, Star, Badge } from 'lucide-react';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { Badge } from './ui/badge';
+import {
+  CalendarDays, MessageSquare, LogOut, Search, Star,
+  LayoutDashboard, Users, User, CheckCircle2,
+  Clock, Plus, Menu, GraduationCap, Filter,
+  ChevronRight, Bell, Upload, AlertCircle
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import toast, { Toaster } from 'react-hot-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
-// Build Fix: Verified no unused DialogHeader
+import { Label } from './ui/label';
+import { DialogHeader } from './ui/dialog';
+import { Separator } from './ui/separator';
 
 interface DashboardProps {
   setIsLoggedIn: (value: boolean) => void;
@@ -27,8 +35,9 @@ interface UserProfile {
   subjects?: { name: string }[];
   preferredSubjects?: { name: string }[];
   location?: string;
-  availability?: string; // JSON string or structured data
+  availability?: string;
   learningGoals?: string;
+  isVerified?: boolean;
 }
 
 interface SessionRequest {
@@ -46,1115 +55,846 @@ interface SearchResult {
   email: string;
   role: string;
   subjects?: { name: string }[];
-  preferredSubjects?: { name: string }[];
+  isVerified?: boolean;
 }
 
-interface Session {
-  id: number;
-  status: ReactNode;
-  tutor: { id: number; name: string };
-  students: { id: number; name: string }[];
-  messages: { id: number; content: string; senderId: number; createdAt: string }[];
-  feedbackProvided?: boolean;
-  sessionRequest?: {
-    id: number;
-    feedback?: {
-      id: number;
-      rating: number;
-      comments?: string;
-    }
-  };
+interface FeedbackData {
+  rating: number;
+  comments: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ setIsLoggedIn, userRole, userId }) => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [selectedTutor, setSelectedTutor] = useState<SearchResult | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [sessionRequests, setSessionRequests] = useState<SessionRequest[]>([]);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [mainSearchQuery, setMainSearchQuery] = useState('');
-  const [mainSearchResults, setMainSearchResults] = useState<SearchResult[]>([]);
-  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
-  const [sessionSearchResults, setSessionSearchResults] = useState<SearchResult[]>([]);
-  const [newSessionStudents, setNewSessionStudents] = useState<number[]>([]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
+interface Subject {
+  id: string;
+  name: string;
+}
+
+type ActiveSection = 'overview' | 'find-tutors' | 'sessions' | 'profile';
+
+const navItems = [
+  { id: 'overview' as ActiveSection, label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: 'find-tutors' as ActiveSection, label: 'Find Tutors', icon: <Users className="w-4 h-4" /> },
+  { id: 'sessions' as ActiveSection, label: 'My Sessions', icon: <CalendarDays className="w-4 h-4" /> },
+  { id: 'profile' as ActiveSection, label: 'Profile', icon: <User className="w-4 h-4" /> },
+];
+
+export default function Dashboard({ setIsLoggedIn, userRole, userId }: DashboardProps) {
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newSessionRequest, setNewSessionRequest] = useState({
-    tutorId: '',
-    subject: '',
-    requestedTime: '',
-    content: '',
-  });
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [sessionRequests, setSessionRequests] = useState<SessionRequest[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [feedbackData, setFeedbackData] = useState<FeedbackData>({ rating: 5, comments: '' });
+  const [isSearching, setIsSearching] = useState(false);
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectFilter, setSubjectFilter] = useState('all');
 
-  const [feedbackForm, setFeedbackForm] = useState({
-    sessionId: '',
-    tutorId: '',
-    tutorName: '',
-    rating: 0,
-    comments: '',
-  });
-
-  // Fetch Subjects
-  const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
-  const fetchSubjects = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/subjects`);
-      const data = await response.json();
-      if (response.ok) {
-        setSubjects(data.subjects);
-      } else {
-        throw new Error(data.message || 'Failed to fetch subjects');
-      }
-    } catch (error) {
-      console.error('Error fetching subjects:', error);
-      toast.error('Failed to load subjects');
-    }
-  };
+  const userName = localStorage.getItem('userName') || profile?.name || 'User';
+  const initials = userName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
   useEffect(() => {
+    if (!userId) return;
+    fetchProfile();
+    fetchSessionRequests();
     fetchSubjects();
-  }, []);
-
-  useEffect(() => {
-    const fetchProfileAndSessions = async () => {
-      if (userId) {
-        try {
-          // Fetch user profile
-          const profileResponse = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`);
-          const profileData = await profileResponse.json();
-          if (!profileResponse.ok) {
-            throw new Error(profileData.message || 'Failed to fetch profile');
-          }
-          setProfile({
-            id: profileData.user.id,
-            name: profileData.user.name,
-            email: profileData.user.email,
-            role: profileData.user.role,
-            subjects: profileData.user.tutor?.subjects || [],
-            preferredSubjects: profileData.user.student?.preferredSubjects || [],
-            location: profileData.user.tutor?.location || '',
-            availability: profileData.user.tutor?.availability || '',
-            learningGoals: profileData.user.student?.learningGoals || '',
-          });
-
-          toast.success('Profile loaded successfully');
-
-          // Fetch sessions
-          const sessionResponse = await fetch(`${API_BASE_URL}/api/users/sessions/${userId}`);
-          const sessionData = await sessionResponse.json();
-          if (!sessionResponse.ok) {
-            throw new Error(sessionData.message || 'Failed to fetch sessions');
-          }
-          setSessions(sessionData);
-          toast.success('Sessions loaded successfully');
-        } catch (error) {
-          console.error('Error fetching data:', error);
-          toast.error('Failed to load profile or sessions');
-        }
-      }
-    };
-
-    fetchProfileAndSessions();
+    searchTutors('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  useEffect(() => {
-    const fetchSessionRequests = async () => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/users/session-requests?role=${userRole}&userId=${userId}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          // Map the data to ensure student and tutor names are properly assigned
-          const formattedRequests = data.requests.map((request: any) => ({
-            ...request,
-            student: request.student || null,
-            tutor: request.tutor || null,
-            subject: request.subject || '',
-          }));
-          setSessionRequests(formattedRequests);
-        } else {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch session requests');
-        }
-      } catch (error) {
-        console.error('Error fetching session requests:', error);
-        toast.error('Failed to load session requests');
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`, {
+        headers: { 'user-id': userId || '' },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.user || data);
       }
-    };
-
-    if (userRole && userId) {
-      fetchSessionRequests();
+    } catch (err) {
+      console.error('Error fetching profile:', err);
     }
-  }, [userId, userRole]);
+  };
+
+  const fetchSessionRequests = async () => {
+    try {
+      const role = localStorage.getItem('userRole') || '';
+      const res = await fetch(
+        `${API_BASE_URL}/api/users/session-requests?role=${role}&userId=${userId}`,
+        { headers: { 'user-id': userId || '' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setSessionRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
+    }
+  };
+
+  const fetchSubjects = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/subjects`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubjects(data.subjects || []);
+      }
+    } catch (err) { /* silent */ }
+  };
+
+  const searchTutors = async (query: string) => {
+    setIsSearching(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(query)}&role=TUTOR`,
+        { headers: { 'user-id': userId || '' } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.users || []);
+      }
+    } catch (err) {
+      console.error('Error searching:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setSearchTerm(q);
+    const timer = setTimeout(() => searchTutors(q), 300);
+    return () => clearTimeout(timer);
+  };
+
+  const handleSessionResponse = async (sessionId: number, status: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/session/${sessionId}/respond`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'user-id': userId || '' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        toast.success(`Session ${status.toLowerCase()} successfully`);
+        fetchSessionRequests();
+      } else {
+        toast.error('Failed to update session');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+    }
+  };
+
+  const handleFeedbackSubmit = async (sessionId: number) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/session/${sessionId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'user-id': userId || '' },
+        body: JSON.stringify({ ...feedbackData, fromId: userId }),
+      });
+      if (res.ok) {
+        toast.success('Feedback submitted!');
+        setFeedbackData({ rating: 5, comments: '' });
+      } else {
+        toast.error('Failed to submit feedback');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+    }
+  };
+
+  const handleUploadVerification = async () => {
+    if (!verificationFile) return;
+    const formData = new FormData();
+    formData.append('document', verificationFile);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/upload-verification/${userId}`, {
+        method: 'POST',
+        headers: { 'user-id': userId || '' },
+        body: formData,
+      });
+      if (res.ok) {
+        toast.success('Verification document uploaded!');
+        setVerificationFile(null);
+      } else {
+        toast.error('Upload failed');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+    }
+  };
 
   const handleLogout = () => {
+    localStorage.clear();
     setIsLoggedIn(false);
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userId');
-    toast.success('Logged out successfully');
     navigate('/');
   };
 
-  const handleMainSearch = async () => {
-    if (!mainSearchQuery.trim()) {
-      toast.error('Please enter a search query');
-      return;
-    }
+  // Stats calculations
+  const pendingCount = sessionRequests.filter(s => s.status?.toLowerCase() === 'pending').length;
+  const approvedCount = sessionRequests.filter(s => s.status?.toLowerCase() === 'accepted').length;
+  const totalCount = sessionRequests.length;
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(mainSearchQuery)}&role=${userRole}`
-      );
-      const data = await response.json();
-      if (response.ok) {
-        setMainSearchResults(data.results);
-        toast.success(`Found ${data.results.length} results`);
-      } else {
-        throw new Error(data.message || 'Search failed');
-      }
-    } catch (error) {
-      console.error('Error searching:', error);
-      setMainSearchResults([]);
-      toast.error('Failed to search. Please try again.');
+  const filteredTutors = subjectFilter === 'all'
+    ? searchResults
+    : searchResults.filter(t => t.subjects?.some(s => s.name === subjectFilter));
+
+  const statusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'accepted': return 'border-border text-foreground';
+      case 'pending': return 'border-border text-muted-foreground';
+      case 'declined': return 'border-destructive/30 text-destructive';
+      default: return 'border-border text-muted-foreground';
     }
   };
 
-  const handleSessionSearch = async () => {
-    if (!sessionSearchQuery.trim()) {
-      toast.error('Please enter a search query');
-      return;
-    }
+  return (
+    <div className="flex h-screen bg-background overflow-hidden">
+      <Toaster position="top-right" />
 
-    try {
-      // For tutors, we always want to search for students
-      const searchRole = userRole === 'TUTOR' ? 'STUDENT' : 'TUTOR';
-      const response = await fetch(
-        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(sessionSearchQuery)}&role=${searchRole}`
-      );
-      const data = await response.json();
-      if (response.ok) {
-        setSessionSearchResults(data.results);
-        if (data.results.length === 0) {
-          toast.error('No results found');
-        } else {
-          toast.success(`Found ${data.results.length} results`);
-        }
-      } else {
-        throw new Error(data.message || 'Search failed');
-      }
-    } catch (error) {
-      console.error('Error searching:', error);
-      setSessionSearchResults([]);
-      toast.error('Failed to search for session participants.');
-    }
-  };
+      {/* Sidebar Overlay (mobile) */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-  const handleSessionRequest = async (tutor: SearchResult) => {
-    try {
-      setSelectedTutor(tutor);
-      setNewSessionRequest({
-        ...newSessionRequest,
-        tutorId: tutor.id.toString(),
-        subject: '', // Reset the form when selecting a new tutor
-        requestedTime: '',
-        content: ''
-      });
+      {/* Sidebar */}
+      <aside className={`
+        fixed md:sticky top-0 left-0 h-full md:h-screen w-64 z-40 md:z-auto
+        flex flex-col border-r border-border bg-card
+        transform transition-transform duration-300
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        {/* Logo */}
+        <div className="p-4 border-b border-border flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <span className="font-bold tracking-tight">EDUConnect</span>
+        </div>
 
-      // Fetch updated subjects for the selected tutor
-      const response = await fetch(`${API_BASE_URL}/api/users/subjects`);
-      const data = await response.json();
-      if (response.ok) {
-        setSubjects(data.subjects);
-      } else {
-        throw new Error(data.message || 'Failed to fetch subjects');
-      }
-    } catch (error) {
-      console.error('Error preparing session request:', error);
-      toast.error('Failed to prepare session request');
-    }
-  };
+        {/* User Info */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-9 h-9">
+              <AvatarFallback className="bg-primary text-primary-foreground text-sm">{initials}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">{userName}</p>
+              <Badge variant="secondary" className="text-xs mt-0.5">
+                {userRole === 'TUTOR' ? 'Tutor' : 'Student'}
+              </Badge>
+            </div>
+          </div>
+        </div>
 
-  const submitSessionRequest = async () => {
-    if (!selectedTutor) {
-      toast.error('Please select a tutor first');
-      return;
-    }
-
-    if (!newSessionRequest.subject) {
-      toast.error('Please select a subject');
-      return;
-    }
-
-    if (!newSessionRequest.requestedTime) {
-      toast.error('Please select a preferred time');
-      return;
-    }
-
-    if (!newSessionRequest.content) {
-      toast.error('Please provide session details');
-      return;
-    }
-
-    // More flexible datetime validation
-    const requestedTime = new Date(newSessionRequest.requestedTime);
-    const now = new Date();
-    const minimumTime = new Date(now.getTime() - (5 * 60 * 1000)); // 5 minutes grace period
-
-    if (requestedTime < minimumTime) {
-      toast.error('Please select a future time for the session');
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/session/request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          studentId: parseInt(userId as string),
-          tutorId: parseInt(newSessionRequest.tutorId),
-          subject: newSessionRequest.subject,
-          content: newSessionRequest.content,
-          requestedTime: newSessionRequest.requestedTime,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to send session request');
-      }
-
-      // Success handling
-      toast.success('Session request sent successfully!');
-
-      // Reset the form
-      setNewSessionRequest({
-        tutorId: '',
-        subject: '',
-        requestedTime: '',
-        content: '',
-      });
-      setSelectedTutor(null);
-
-      // Refresh session requests list
-      const refreshedRequests = await fetch(
-        `${API_BASE_URL}/api/users/session-requests?role=${userRole}&userId=${userId}`
-      );
-      if (refreshedRequests.ok) {
-        const refreshedData = await refreshedRequests.json();
-        setSessionRequests(refreshedData.requests);
-      }
-    } catch (error) {
-      console.error('Error sending session request:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to send session request');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSessionResponse = async (sessionRequestId: number, status: 'accepted' | 'declined') => {
-    try {
-      const sessionRequest = sessionRequests.find(req => req.id === sessionRequestId);
-      if (!sessionRequest) {
-        toast.error('Session request not found');
-        return;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/users/session/${sessionRequestId}/respond`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        // Update local state for session requests
-        setSessionRequests(prevRequests =>
-          prevRequests.map(req =>
-            req.id === sessionRequestId ? { ...req, status } : req
-          )
-        );
-
-        if (status === 'accepted') {
-          if (data.session) {
-            setSessions(prevSessions => [...prevSessions, data.session]);
-            toast.success('Session request accepted and session created');
-          } else {
-            toast.error('Session was not created properly');
-          }
-        } else {
-          toast.success('Session request declined');
-        }
-      } else {
-        throw new Error(data.message || 'Failed to update session status');
-      }
-    } catch (error) {
-      console.error('Error updating session status:', error);
-      toast.error(error instanceof Error ? error.message : 'Error updating session status');
-    }
-  };
-
-  const handleFeedbackSubmit = async () => {
-    try {
-      if (!feedbackForm.sessionId || !feedbackForm.tutorId) {
-        toast.error('Please select a session');
-        return;
-      }
-
-      if (!feedbackForm.rating) {
-        toast.error('Please provide a rating');
-        return;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/users/session/${feedbackForm.sessionId}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          rating: feedbackForm.rating,
-          comments: feedbackForm.comments,
-          fromId: parseInt(userId as string), // Student's user ID
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        toast.success('Feedback submitted successfully');
-        setSessions(prevSessions =>
-          prevSessions.map(session =>
-            session.id === parseInt(feedbackForm.sessionId)
-              ? { ...session, feedbackProvided: true }
-              : session
-          )
-        );
-        setFeedbackForm({ sessionId: '', tutorId: '', tutorName: '', rating: 0, comments: '' });
-      } else {
-        toast.error(data.message || 'Failed to submit feedback');
-      }
-    } catch (error) {
-      console.error('Error submitting feedback:', error);
-      toast.error('Error submitting feedback');
-    }
-  };
-
-  const handleCreateSession = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tutorId: userId,
-          studentIds: newSessionStudents,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create session');
-      }
-
-      const newSession = await response.json();
-      setSessions([...sessions, newSession]);
-      setNewSessionStudents([]);
-      toast.success('New session created successfully');
-    } catch (error) {
-      console.error('Error creating session:', error);
-      toast.error('Failed to create new session');
-    }
-  };
-
-  const handleDeleteSession = async (sessionId: number) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/sessions/${sessionId}`, {
-        method: 'DELETE',
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setSessions(sessions.filter(session => session.id !== sessionId));
-        toast.success('Session deleted successfully');
-      } else {
-        toast.error(`Failed to delete session: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Error deleting session:', error);
-      toast.error('Failed to delete session');
-    }
-  };
-
-  const handleEditProfile = () => {
-    setIsEditing(true);
-    setEditedProfile(profile);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!editedProfile) return;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editedProfile),
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setProfile(data.user);
-        setIsEditing(false);
-        toast.success('Profile updated successfully');
-      } else {
-        toast.error(`Failed to update profile: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
-    }
-  };
-
-  const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('document', file);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/users/upload-verification/${userId}`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        console.log('Document uploaded successfully');
-        toast.success('Document uploaded successfully');
-      } else {
-        toast.error(`Failed to upload document: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Error uploading document:', error);
-      toast.error('Failed to upload document');
-    }
-  };
-
-  const renderSessionRequests = () => (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>Session Requests</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-[300px]">
-          {sessionRequests.map((request) => (
-            <Card key={request.id} className="mb-4">
-              <CardContent className="p-4">
-                <p>
-                  <strong>{userRole === 'STUDENT' ? 'Tutor' : 'Student'}:</strong>{' '}
-                  {userRole === 'STUDENT'
-                    ? request.tutor?.name || 'Unknown'
-                    : request.student?.name || 'Unknown'}
-                </p>
-
-                <p><strong>Subject:</strong> {request.subject}</p>
-                <p><strong>Requested Time:</strong> {new Date(request.requestedTime).toLocaleString()}</p>
-                <Badge className={`badge-${request.status}`}>
-                  {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                </Badge>
-                {userRole === 'TUTOR' && request.status === 'pending' && (
-                  <div className="mt-2 space-x-2">
-                    <Button onClick={() => handleSessionResponse(request.id, 'accepted')} size="sm">
-                      Accept
-                    </Button>
-                    <Button onClick={() => handleSessionResponse(request.id, 'declined')} variant="outline" size="sm">
-                      Decline
-                    </Button>
-                  </div>
+        {/* Nav Items */}
+        <nav className="flex-1 p-3 space-y-1">
+          {navItems
+            .filter(item => !(item.id === 'find-tutors' && userRole === 'TUTOR'))
+            .map(item => (
+              <button
+                key={item.id}
+                onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                  activeSection === item.id
+                    ? 'bg-primary/10 text-primary font-medium'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                {item.icon}
+                {item.label}
+                {item.id === 'sessions' && pendingCount > 0 && (
+                  <Badge className="ml-auto bg-primary text-primary-foreground border-0 text-xs px-1.5 py-0 h-5">
+                    {pendingCount}
+                  </Badge>
                 )}
-              </CardContent>
-            </Card>
-          ))}
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
+              </button>
+            ))}
+        </nav>
 
-  const renderOverview = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Sessions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>You have {sessions.length} active session{sessions.length !== 1 ? 's' : ''}.</p>
-          <Button variant="link" onClick={() => setActiveTab('sessions')}>View all sessions</Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>You have new messages in your sessions.</p>
-          <Button variant="link" onClick={() => setActiveTab('sessions')}>Check your sessions</Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        {/* Logout */}
+        <div className="p-3 border-t border-border">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
+        </div>
+      </aside>
 
-  const renderSessions = () => (
-    <div>
-      <h2 className="text-2xl font-bold mb-4">Session Management</h2>
-      {userRole === 'TUTOR' && (
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button variant="default" className="mb-4">
-              <CalendarDays className="mr-2 h-4 w-4" />
-              Create New Session
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogTitle>Create New Session</DialogTitle>
-            <DialogDescription>
-              Search for students and select them to create a new session.
-            </DialogDescription>
-            <div className="space-y-4 mt-4">
-              <div className="flex space-x-2">
-                <Input
-                  type="text"
-                  placeholder="Search for students"
-                  value={sessionSearchQuery}
-                  onChange={(e) => setSessionSearchQuery(e.target.value)}
-                />
-                <Button onClick={handleSessionSearch}>
-                  <Search className="mr-2 h-4 w-4" />
-                  Search
-                </Button>
-              </div>
-              {sessionSearchResults.length > 0 && (
-                <ScrollArea className="h-[200px] mt-4">
-                  {sessionSearchResults.map((student) => (
-                    <Card key={student.id} className="mb-2">
-                      <CardContent className="flex items-center justify-between py-2">
-                        <div className="flex items-center space-x-2">
-                          <Avatar>
-                            <AvatarImage src="/placeholder-avatar.jpg" />
-                            <AvatarFallback>{student.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <span>{student.name}</span>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Bar */}
+        <header className="h-14 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              className="md:hidden p-2 rounded-lg hover:bg-accent"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+            <div>
+              <h1 className="font-semibold text-sm">
+                {navItems.find(n => n.id === activeSection)?.label || 'Dashboard'}
+              </h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {pendingCount > 0 && (
+              <button
+                onClick={() => setActiveSection('sessions')}
+                className="relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+              >
+                <Bell className="w-4 h-4" />
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
+              </button>
+            )}
+            <Avatar className="w-7 h-7 cursor-pointer" onClick={() => setActiveSection('profile')}>
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">{initials}</AvatarFallback>
+            </Avatar>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <ScrollArea className="flex-1">
+          <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+
+            {/* OVERVIEW */}
+            {activeSection === 'overview' && (
+              <>
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold">Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}, {userName.split(' ')[0]}</h2>
+                  <p className="text-muted-foreground text-sm">Here's what's happening with your sessions.</p>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Sessions', value: totalCount, icon: <CalendarDays className="w-4 h-4" /> },
+                    { label: 'Pending', value: pendingCount, icon: <Clock className="w-4 h-4" /> },
+                    { label: 'Approved', value: approvedCount, icon: <CheckCircle2 className="w-4 h-4" /> },
+                    { label: 'Tutors Found', value: searchResults.length, icon: <Users className="w-4 h-4" /> },
+                  ].map((stat, i) => (
+                    <Card key={i} className="hover:shadow-sm transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{stat.label}</span>
+                          <span className="p-1.5 rounded-md bg-secondary text-muted-foreground">
+                            {stat.icon}
+                          </span>
                         </div>
-                        <input
-                          type="checkbox"
-                          id={`student-${student.id}`}
-                          checked={newSessionStudents.includes(student.id)}
-                          onChange={(e) => {
-                            const selectedId = student.id;
-                            if (e.target.checked) {
-                              setNewSessionStudents([...newSessionStudents, selectedId]);
-                            } else {
-                              setNewSessionStudents(newSessionStudents.filter(id => id !== selectedId));
-                            }
-                          }}
-                          className="h-4 w-4"
-                        />
+                        <p className="text-3xl font-bold">{stat.value}</p>
                       </CardContent>
                     </Card>
                   ))}
-                </ScrollArea>
-              )}
-              <Button className="w-full" onClick={handleCreateSession}>
-                <CalendarDays className="mr-2 h-4 w-4" />
-                Create Session
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-      <div className="space-y-4">
-        {sessions.map(session => (
-          <Card key={session.id}>
-            <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>
-                  {userRole === 'TUTOR'
-                    ? `Session with ${session.students.map(s => s.name).join(', ')}`
-                    : `Session with ${session.tutor.name}`}
-                </span>
-                <Badge className={session.status === 'active' ? 'default' : 'secondary'}>
-                  {session.status}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Latest message: {session.messages && session.messages.length > 0
-                  ? session.messages[session.messages.length - 1].content
-                  : 'No messages yet'}
-              </p>
-              <div className="flex space-x-2">
-                <Button variant="outline" onClick={() => navigate(`/chat/${session.id}`)}>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Open Chat
-                </Button>
-                {userRole === 'TUTOR' && (
-                  <Button variant="destructive" onClick={() => handleDeleteSession(session.id)}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Delete Session
-                  </Button>
-                )}
-                {userRole === 'STUDENT' && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="default" size="sm">
-                        <Star className="mr-2 h-4 w-4" />
-                        Provide Feedback
+                </div>
+
+                {/* Recent Activity */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">Recent Sessions</CardTitle>
+                      <Button variant="ghost" size="sm" onClick={() => setActiveSection('sessions')} className="text-primary gap-1 text-xs">
+                        View all <ChevronRight className="w-3 h-3" />
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogTitle>Leave Feedback for {session.tutor.name}</DialogTitle>
-                      <DialogDescription>
-                        Please rate your session with {session.tutor.name}.
-                      </DialogDescription>
-                      <div className="flex items-center space-x-2 mt-4">
-                        {[1, 2, 3, 4, 5].map((rating) => (
-                          <Button
-                            key={rating}
-                            variant={feedbackForm.rating === rating ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setFeedbackForm({
-                              ...feedbackForm,
-                              sessionId: session.id.toString(),
-                              tutorId: session.tutor.id.toString(),
-                              tutorName: session.tutor.name,
-                              rating
-                            })}
-                          >
-                            <Star className={`h-4 w-4 ${feedbackForm.rating >= rating ? 'fill-current text-yellow-500' : 'text-gray-400'}`} />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {sessionRequests.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p className="text-sm">No sessions yet.</p>
+                        {userRole === 'STUDENT' && (
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => setActiveSection('find-tutors')}>
+                            <Plus className="w-3 h-3 mr-1" /> Find a tutor
                           </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {sessionRequests.slice(0, 5).map(req => (
+                          <div key={req.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Avatar className="w-8 h-8 shrink-0">
+                                <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                  {(userRole === 'TUTOR' ? req.student?.name : req.tutor?.name)?.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {userRole === 'TUTOR' ? req.student?.name : req.tutor?.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">{req.subject}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <span className="text-xs text-muted-foreground hidden sm:block">
+                                {new Date(req.requestedTime).toLocaleDateString()}
+                              </span>
+                              <Badge variant="outline" className={`text-xs ${statusColor(req.status)}`}>
+                                {req.status}
+                              </Badge>
+                            </div>
+                          </div>
                         ))}
                       </div>
-                      <Textarea
-                        placeholder="Comments"
-                        value={feedbackForm.comments}
-                        onChange={(e) => setFeedbackForm({ ...feedbackForm, comments: e.target.value })}
-                        className="mt-4"
-                      />
-                      <Button
-                        onClick={handleFeedbackSubmit}
-                        className="mt-4 w-full"
-                        disabled={!feedbackForm.rating}
-                      >
-                        Submit Feedback
-                      </Button>
-                    </DialogContent>
-                  </Dialog>
-                )}
-                {userRole === 'STUDENT' && session.feedbackProvided && (
-                  <Badge className="secondary">Feedback Provided</Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+                    )}
+                  </CardContent>
+                </Card>
 
-  const renderProfile = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle>My Profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {profile && (
-          <div>
-            {isEditing ? (
-              <div className="space-y-4">
-                <Input
-                  type="text"
-                  value={editedProfile?.name || ''}
-                  onChange={(e) => setEditedProfile({ ...editedProfile!, name: e.target.value })}
-                  placeholder="Name"
-                />
-                <Input
-                  type="email"
-                  value={editedProfile?.email || ''}
-                  onChange={(e) => setEditedProfile({ ...editedProfile!, email: e.target.value })}
-                  placeholder="Email"
-                />
-                {profile.role === 'TUTOR' && (
-                  <>
-                    <p>
-                      <strong>Subjects:</strong>{' '}
-                      {profile.subjects && profile.subjects.length > 0
-                        ? profile.subjects.map((s) => s.name).join(', ')
-                        : 'Not specified'}
-                    </p>
-                    <p>
-                      <strong>Location:</strong> {profile.location || 'Not specified'}
-                    </p>
-                    <p>
-                      <strong>Availability:</strong>{' '}
-                      {Array.isArray(profile.availability)
-                        ? profile.availability.map((slot: { day: string; time: string }) => (
-                          <span key={`${slot.day}-${slot.time}`}>
-                            {slot.day}: {slot.time}
-                          </span>
-                        ))
-                        : 'Not specified'}
-                    </p>
-                  </>
+                {/* Tutor CTA for students */}
+                {userRole === 'STUDENT' && (
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="font-semibold">Ready to find your perfect tutor?</h3>
+                        <p className="text-sm text-muted-foreground mt-0.5">Browse 500+ verified tutors across 50+ subjects.</p>
+                      </div>
+                      <Button className="shrink-0" onClick={() => setActiveSection('find-tutors')}>
+                        Browse Tutors <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </CardContent>
+                  </Card>
                 )}
-                {profile.role === 'STUDENT' && (
-                  <>
-                    <p>
-                      <strong>Learning Goals:</strong> {profile.learningGoals || 'Not specified'}
-                    </p>
-                    <p>
-                      <strong>Preferred Subjects:</strong>{' '}
-                      {profile.preferredSubjects && profile.preferredSubjects.length > 0
-                        ? profile.preferredSubjects.map((s) => s.name).join(', ')
-                        : 'Not specified'}
-                    </p>
-                  </>
+
+                {/* Verification upload for tutors */}
+                {userRole === 'TUTOR' && (
+                  <Card className="border-border bg-secondary/40">
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="space-y-3 flex-1">
+                          <div>
+                            <h3 className="font-semibold text-sm">Upload Verification Document</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">Upload your credentials PDF to become a verified tutor.</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="file"
+                              accept=".pdf"
+                              onChange={e => setVerificationFile(e.target.files?.[0] || null)}
+                              className="text-xs h-8"
+                            />
+                            {verificationFile && (
+                              <Button size="sm" onClick={handleUploadVerification} className="shrink-0 h-8">
+                                <Upload className="w-3 h-3 mr-1" /> Upload
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
-                <div className="space-x-2">
-                  <Button onClick={handleSaveProfile}>Save</Button>
-                  <Button variant="outline" onClick={() => setIsEditing(false)}>Cancel</Button>
+              </>
+            )}
+
+            {/* FIND TUTORS */}
+            {activeSection === 'find-tutors' && userRole === 'STUDENT' && (
+              <>
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold">Find Tutors</h2>
+                  <p className="text-muted-foreground text-sm">Browse verified tutors and request a session.</p>
                 </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p><strong>Name:</strong> {profile.name}</p>
-                <p><strong>Email:</strong> {profile.email}</p>
-                <p><strong>Role:</strong> {profile.role}</p>
-                {profile.role === 'TUTOR' && (
-                  <>
-                    <p><strong>Subjects:</strong> {profile.subjects?.map(s => s.name).join(', ')}</p>
-                    <p><strong>Location:</strong> {profile.location}</p>
-                    <div>
-                      <p><strong>Availability:</strong></p>
-                      {Array.isArray(profile.availability) ? (
-                        profile.availability.map((slot: { day: string; time: string }) => (
-                          <p key={`${slot.day}-${slot.time}`} style={{ marginLeft: "1em" }}>
-                            {slot.day}: {slot.time}
-                          </p>
-                        ))
+
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name, subject..."
+                      className="pl-10"
+                      value={searchTerm}
+                      onChange={handleSearch}
+                    />
+                  </div>
+                  <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                    <SelectTrigger className="w-44">
+                      <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="Subject" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Subjects</SelectItem>
+                      {subjects.map(s => (
+                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isSearching ? (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="h-48 rounded-xl bg-secondary animate-pulse" />
+                    ))}
+                  </div>
+                ) : filteredTutors.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p>No tutors found. Try a different search.</p>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredTutors.map(tutor => (
+                      <Card key={tutor.id} className="hover:shadow-md hover:border-primary/30 transition-all group">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <Avatar className="w-12 h-12">
+                              <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                                {tutor.name?.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-sm truncate">{tutor.name}</p>
+                                {tutor.isVerified && (
+                                  <Badge variant="outline" className="text-xs px-1.5 border-border text-muted-foreground">
+                                    Verified
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate">{tutor.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {(tutor.subjects || []).slice(0, 3).map(s => (
+                              <Badge key={s.name} variant="secondary" className="text-xs">{s.name}</Badge>
+                            ))}
+                            {(tutor.subjects || []).length > 3 && (
+                              <Badge variant="secondary" className="text-xs">+{tutor.subjects!.length - 3}</Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 text-yellow-400">
+                            {Array.from({ length: 5 }).map((_, j) => (
+                              <Star key={j} className="w-3 h-3 fill-current" />
+                            ))}
+                            <span className="text-xs text-muted-foreground ml-1">5.0</span>
+                          </div>
+
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                className="w-full h-9 text-sm"
+                                        >
+                                Request Session
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Request Session with {tutor.name}</DialogTitle>
+                                <DialogDescription>Fill in the session details below.</DialogDescription>
+                              </DialogHeader>
+                              <RequestSessionForm
+                                tutorId={tutor.id}
+                                userId={userId}
+                                subjects={tutor.subjects || []}
+                                onSuccess={() => {
+                                  fetchSessionRequests();
+                                  setActiveSection('sessions');
+                                }}
+                              />
+                            </DialogContent>
+                          </Dialog>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* SESSIONS */}
+            {activeSection === 'sessions' && (
+              <>
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold">My Sessions</h2>
+                  <p className="text-muted-foreground text-sm">
+                    {userRole === 'TUTOR' ? 'Manage incoming session requests.' : 'Track all your booked sessions.'}
+                  </p>
+                </div>
+
+                {sessionRequests.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <CalendarDays className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No sessions yet.</p>
+                    {userRole === 'STUDENT' && (
+                      <Button variant="outline" size="sm" className="mt-3" onClick={() => setActiveSection('find-tutors')}>
+                        <Plus className="w-3 h-3 mr-1" /> Find a tutor
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sessionRequests.map(req => (
+                      <Card key={req.id} className="hover:shadow-sm transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-10 h-10">
+                                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                                  {(userRole === 'TUTOR' ? req.student?.name : req.tutor?.name)?.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {userRole === 'TUTOR' ? req.student?.name : req.tutor?.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{req.subject}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(req.requestedTime).toLocaleString()}
+                              </span>
+                              <Badge variant="outline" className={`text-xs ${statusColor(req.status)}`}>
+                                {req.status}
+                              </Badge>
+                              {userRole === 'TUTOR' && req.status?.toLowerCase() === 'pending' && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => handleSessionResponse(req.id, 'accepted')}
+                                  >
+                                    Accept
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                                    onClick={() => handleSessionResponse(req.id, 'declined')}
+                                  >
+                                    Decline
+                                  </Button>
+                                </>
+                              )}
+                              {req.status?.toLowerCase() === 'accepted' && (
+                                <>
+                                  <Link to={`/chat/${req.id}`}>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                                      <MessageSquare className="w-3 h-3" /> Chat
+                                    </Button>
+                                  </Link>
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                                        <Star className="w-3 h-3" /> Feedback
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Leave Feedback</DialogTitle>
+                                        <DialogDescription>Rate your experience with this session.</DialogDescription>
+                                      </DialogHeader>
+                                      <div className="space-y-4 py-2">
+                                        <div className="space-y-2">
+                                          <Label>Rating</Label>
+                                          <div className="flex gap-2">
+                                            {[1, 2, 3, 4, 5].map(r => (
+                                              <button
+                                                key={r}
+                                                onClick={() => setFeedbackData(f => ({ ...f, rating: r }))}
+                                                className={`p-2 rounded-lg transition-colors ${feedbackData.rating >= r ? 'text-yellow-400' : 'text-muted-foreground'}`}
+                                              >
+                                                <Star className={`w-5 h-5 ${feedbackData.rating >= r ? 'fill-current' : ''}`} />
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Comments</Label>
+                                          <Textarea
+                                            placeholder="Share your experience..."
+                                            value={feedbackData.comments}
+                                            onChange={e => setFeedbackData(f => ({ ...f, comments: e.target.value }))}
+                                            rows={3}
+                                          />
+                                        </div>
+                                      </div>
+                                      <DialogFooter>
+                                        <Button
+                                          className=""
+                                          onClick={() => handleFeedbackSubmit(req.id)}
+                                        >
+                                          Submit Feedback
+                                        </Button>
+                                      </DialogFooter>
+                                    </DialogContent>
+                                  </Dialog>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* PROFILE */}
+            {activeSection === 'profile' && profile && (
+              <>
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold">Profile</h2>
+                  <p className="text-muted-foreground text-sm">Manage your account information.</p>
+                </div>
+
+                <Card>
+                  <CardContent className="p-6 space-y-6">
+                    <div className="flex items-start gap-4">
+                      <Avatar className="w-16 h-16">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xl">{initials}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="text-xl font-bold">{profile.name}</h3>
+                        <p className="text-muted-foreground text-sm">{profile.email}</p>
+                        <Badge variant="secondary" className="mt-1.5">
+                          {profile.role === 'TUTOR' ? 'Tutor' : 'Student'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="grid sm:grid-cols-2 gap-6">
+                      {profile.role === 'TUTOR' ? (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Subjects</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(profile.subjects || []).map(s => (
+                                <Badge key={s.name} variant="secondary">{s.name}</Badge>
+                              ))}
+                              {(!profile.subjects || profile.subjects.length === 0) && (
+                                <span className="text-sm text-muted-foreground">No subjects set</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Location</p>
+                            <p className="text-sm">{profile.location || '—'}</p>
+                          </div>
+                        </>
                       ) : (
-                        <p>Not specified</p>
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Learning Goals</p>
+                            <p className="text-sm">{profile.learningGoals || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Preferred Subjects</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(profile.preferredSubjects || []).map(s => (
+                                <Badge key={s.name} variant="secondary">{s.name}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
 
-                  </>
-                )}
-                {profile.role === 'STUDENT' && (
-                  <>
-                    <p><strong>Learning Goals:</strong> {profile.learningGoals}</p>
-                    <p><strong>Preferred Subjects:</strong> {profile.preferredSubjects?.map(s => s.name).join(', ')}</p>
-                  </>
-                )}
-                <Button variant="outline" onClick={handleEditProfile}>Edit Profile</Button>
-              </div>
-            )}
-            {profile.role === 'TUTOR' && (
-              <div className="mt-4">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleUploadDocument}
-                  style={{ display: 'none' }}
-                  id="upload-document"
-                />
-                <label htmlFor="upload-document">
-                  <Button asChild>
-                    <span>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload Verification Document
-                    </span>
-                  </Button>
-                </label>
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-  const renderSessionCreationDialog = () => (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="default" className="mb-4">
-          <CalendarDays className="mr-2 h-4 w-4" />
-          Create New Session
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogTitle>Create New Session</DialogTitle>
-        <DialogDescription>
-          Search for students and select them to create a new session.
-        </DialogDescription>
-        <div className="space-y-4 mt-4">
-          <div className="flex space-x-2">
-            <Input
-              type="text"
-              placeholder="Search for students"
-              value={sessionSearchQuery}
-              onChange={(e) => setSessionSearchQuery(e.target.value)}
-            />
-            <Button onClick={handleSessionSearch}>
-              <Search className="mr-2 h-4 w-4" />
-              Search
-            </Button>
-          </div>
-          {sessionSearchResults.length > 0 && (
-            <ScrollArea className="h-[200px] mt-4">
-              {sessionSearchResults.map((student) => (
-                <Card key={student.id} className="mb-2">
-                  <CardContent className="flex items-center justify-between py-2">
-                    <div className="flex items-center space-x-2">
-                      <span>{student.name}</span>
+                    <div className="flex justify-end">
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <User className="w-4 h-4" /> Edit Profile
+                      </Button>
                     </div>
-                    <input
-                      type="checkbox"
-                      id={`student-${student.id}`}
-                      checked={newSessionStudents.includes(student.id)}
-                      onChange={(e) => {
-                        const selectedId = student.id;
-                        if (e.target.checked) {
-                          setNewSessionStudents([...newSessionStudents, selectedId]);
-                        } else {
-                          setNewSessionStudents(newSessionStudents.filter(id => id !== selectedId));
-                        }
-                      }}
-                      className="h-4 w-4"
-                    />
                   </CardContent>
                 </Card>
-              ))}
-            </ScrollArea>
-          )}
-          <Button className="w-full" onClick={handleCreateSession}>
-            <CalendarDays className="mr-2 h-4 w-4" />
-            Create Session
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+              </>
+            )}
 
-  const renderMainSearchResults = () => (
-    <div className="mt-4">
-      <h3 className="text-xl font-semibold mb-2">Search Results</h3>
-      <ScrollArea className="h-[300px]">
-        {mainSearchResults.map((result) => (
-          <Card key={result.id} className="mb-2">
-            <CardContent className="py-2">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p><strong>Name:</strong> {result.name}</p>
-                  <p><strong>Email:</strong> {result.email}</p>
-                  {result.subjects && <p><strong>Subjects:</strong> {result.subjects.map(s => s.name).join(', ')}</p>}
-                </div>
-                {userRole === 'STUDENT' && (
-                  <Dialog onOpenChange={(open) => {
-                    if (!open) {
-                      // Reset form when dialog is closed
-                      setNewSessionRequest({
-                        tutorId: '',
-                        subject: '',
-                        requestedTime: '',
-                        content: '',
-                      });
-                      setSelectedTutor(null);
-                      setIsSubmitting(false);
-                    }
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSessionRequest(result)}
-                      >
-                        Request Session
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogTitle>Request Session with {result.name}</DialogTitle>
-                      <DialogDescription className="text-muted-foreground">
-                        Please provide details for your session request.
-                      </DialogDescription>
-
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="subject">Subject</Label>
-                          <Select
-                            value={newSessionRequest.subject}
-                            onValueChange={(value) =>
-                              setNewSessionRequest({ ...newSessionRequest, subject: value })
-                            }
-                          >
-                            <SelectTrigger className="w-full" id="subject">
-                              <SelectValue placeholder="Select a subject" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {subjects.map((subject) => (
-                                <SelectItem key={subject.id} value={subject.name}>
-                                  {subject.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="requestedTime">Preferred Time</Label>
-                          <Input
-                            id="requestedTime"
-                            type="datetime-local"
-                            min={new Date().toISOString().slice(0, 16)}
-                            value={newSessionRequest.requestedTime}
-                            onChange={(e) =>
-                              setNewSessionRequest({ ...newSessionRequest, requestedTime: e.target.value })
-                            }
-                          />
-                          <p className="text-sm text-muted-foreground">
-                            Select your preferred session time
-                          </p>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="content">Session Details</Label>
-                          <Textarea
-                            id="content"
-                            placeholder="Describe what you'd like to learn or discuss in this session..."
-                            value={newSessionRequest.content}
-                            onChange={(e) => setNewSessionRequest({ ...newSessionRequest, content: e.target.value })}
-                            className="min-h-[100px]"
-                          />
-                        </div>
-                      </div>
-
-                      <DialogFooter>
-                        <Button
-                          onClick={submitSessionRequest}
-                          disabled={isSubmitting}
-                          className="w-full"
-                        >
-                          {isSubmitting ? (
-                            <div className="flex items-center justify-center">
-                              <span className="mr-2">Sending Request...</span>
-                            </div>
-                          ) : (
-                            'Send Session Request'
-                          )}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      </main>
     </div>
   );
+}
+
+// Inline session request form component
+interface RequestSessionFormProps {
+  tutorId: number;
+  userId: string | null;
+  subjects: { name: string }[];
+  onSuccess: () => void;
+}
+
+function RequestSessionForm({ tutorId, userId, subjects, onSuccess }: RequestSessionFormProps) {
+  const [subject, setSubject] = useState('');
+  const [requestedTime, setRequestedTime] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subject || !requestedTime) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/session/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tutorId, studentId: userId, subject, requestedTime }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success('Session requested successfully!');
+        onSuccess();
+      } else {
+        toast.error(data.message || 'Failed to request session');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      <Toaster position="top-right" />
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-md">
-        <div className="p-4">
-          <div className="flex items-center space-x-4 mb-6">
-            <Avatar>
-              <AvatarImage src="/placeholder-avatar.jpg" />
-              <AvatarFallback>{profile?.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <h2 className="font-semibold">{profile?.name}</h2>
-              <p className="text-sm text-gray-500">{profile?.role}</p>
-            </div>
-          </div>
-          <nav>
-            <ul className="space-y-2">
-              <li>
-                <Button variant="ghost" className="w-full justify-start" onClick={() => setActiveTab('overview')}>
-                  <CalendarDays className="mr-2 h-4 w-4" />
-                  Overview
-                </Button>
-              </li>
-              <li>
-                <Button variant="ghost" className="w-full justify-start" onClick={() => setActiveTab('sessions')}>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Sessions
-                </Button>
-              </li>
-              <li>
-                <Button variant="ghost" className="w-full justify-start" onClick={() => setActiveTab('profile')}>
-                  <User className="mr-2 h-4 w-4" />
-                  My Profile
-                </Button>
-              </li>
-            </ul>
-          </nav>
-        </div>
-        <div className="absolute bottom-4 left-4">
-          <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-red-500">
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 p-8 overflow-y-auto">
-        <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-
-        {/* Search bar */}
-        <div className="mb-6 flex">
-          <Input
-            type="text"
-            placeholder={`Search for ${userRole === 'STUDENT' ? 'tutors' : 'students'}`}
-            value={mainSearchQuery}
-            onChange={(e) => setMainSearchQuery(e.target.value)}
-            className="mr-2"
-          />
-          <Button onClick={handleMainSearch}>
-            <Search className="mr-2 h-4 w-4" />
-            Search
-          </Button>
-        </div>
-
-        {/* Search results */}
-        {mainSearchResults.length > 0 && renderMainSearchResults()}
-
-        {/* Dashboard content */}
-        {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'sessions' && (
-          <>
-            {userRole === 'TUTOR' && renderSessionCreationDialog()}
-            {renderSessions()}
-          </>
+    <form onSubmit={handleSubmit} className="space-y-4 py-2">
+      <div className="space-y-2">
+        <Label>Subject</Label>
+        {subjects.length > 0 ? (
+          <Select onValueChange={setSubject}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a subject" />
+            </SelectTrigger>
+            <SelectContent>
+              {subjects.map(s => (
+                <SelectItem key={s.name} value={s.name}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input placeholder="Enter subject" value={subject} onChange={e => setSubject(e.target.value)} />
         )}
-        {activeTab === 'profile' && renderProfile()}
-        {renderSessionRequests()}
       </div>
-    </div>
+      <div className="space-y-2">
+        <Label>Preferred Date & Time</Label>
+        <Input type="datetime-local" value={requestedTime} onChange={e => setRequestedTime(e.target.value)} />
+      </div>
+      <DialogFooter>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Requesting...
+            </span>
+          ) : 'Send Request'}
+        </Button>
+      </DialogFooter>
+    </form>
   );
-};
-
-export default Dashboard;
+}

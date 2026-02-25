@@ -48,10 +48,13 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ setIsLoggedIn, setUserRole, set
 
       const data = await response.json();
       if (response.ok) {
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('userRole', data.user.role);
+        localStorage.setItem('userId', data.user.id);
         setIsLoggedIn(true);
         setUserRole(data.user.role);
         setUserId(data.user.id);
-        if (data.user.role === "ADMIN") {
+        if (data.user.role.toLowerCase() === "admin") {
           navigate('/admin/dashboard');
         } else {
           navigate('/dashboard');

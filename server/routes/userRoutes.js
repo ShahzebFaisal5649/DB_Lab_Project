@@ -184,12 +184,16 @@ router.post('/login', async (req, res) => {
       [email]
     );
 
+    console.log('Login attempt for:', email);
     if (users.length === 0) {
+      console.log('User not found in database');
       return res.status(400).json({ message: 'Invalid email or password' });
     }
 
     const user = users[0];
+    console.log('User found, comparing password...');
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match:', isMatch);
 
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid email or password' });
@@ -399,15 +403,14 @@ router.get('/profile/:id', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        location: user.location || null,
-        availability: availability,
-        isVerified: Boolean(user.isVerified),
-        careerStatus: user.careerStatus || null,
-        subjects: subjects.map(s => ({ name: s.name }))
+        tutor: {
+          location: user.location || null,
+          availability: availability,
+          isVerified: Boolean(user.isVerified),
+          careerStatus: user.careerStatus || null,
+          subjects: subjects.map(s => ({ name: s.name }))
+        }
       };
-
-      // Log the formatted data for debugging
-      console.log('Formatted tutor data:', JSON.stringify(formattedUser, null, 2));
 
       res.status(200).json({ user: formattedUser });
     } else if (user.role === 'STUDENT') {
@@ -426,8 +429,10 @@ router.get('/profile/:id', async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        learningGoals: user.learningGoals || null,
-        preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
+        student: {
+          learningGoals: user.learningGoals || null,
+          preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
+        }
       };
 
       res.status(200).json({ user: formattedUser });
@@ -825,7 +830,7 @@ router.put('/session/:id/respond', async (req, res) => {
       [status, sessionRequestId]
     );
 
-    let newSession = null;
+    let newSessionId = null;
     if (status === 'accepted') {
       // Create new session
       const [sessionResult] = await conn.execute(
@@ -841,18 +846,51 @@ router.put('/session/:id/respond', async (req, res) => {
         [sessionId, sessionRequest.studentId]
       );
 
-      newSession = {
-        id: sessionId,
+      // Link request to session
+      await conn.execute(
+        'UPDATE SessionRequest SET sessionId = ? WHERE id = ?',
+        [sessionId, sessionRequestId]
+      );
+
+      const [newSessions] = await conn.execute(
+        `SELECT 
+          s.*,
+          t.userId as tutorUserId,
+          tu.name as tutorName,
+          GROUP_CONCAT(DISTINCT st.userId) as studentIds,
+          GROUP_CONCAT(DISTINCT su.name) as studentNames,
+          sr.status as requestStatus,
+          sj.name as subject
+        FROM Session s
+        JOIN Tutor t ON s.tutorId = t.id
+        JOIN User tu ON t.userId = tu.id
+        JOIN _SessionStudents ss ON s.id = ss.A
+        JOIN Student st ON ss.B = st.id
+        JOIN User su ON st.userId = su.id
+        LEFT JOIN SessionRequest sr ON s.sessionRequestId = sr.id
+        LEFT JOIN Subject sj ON sr.subjectId = sj.id
+        WHERE s.id = ?
+        GROUP BY s.id`,
+        [sessionId]
+      );
+
+      const session = newSessions[0];
+      const studentIds = session.studentIds.split(',');
+      const studentNames = session.studentNames.split(',');
+
+      newSessionId = {
+        id: session.id,
         tutor: {
-          id: sessionRequest.tutorUserId,
-          name: sessionRequest.tutorName
+          id: session.tutorUserId,
+          name: session.tutorName
         },
-        students: [{
-          id: sessionRequest.studentUserId,
-          name: sessionRequest.studentName
-        }],
-        messages: [],
-        status: 'active'
+        students: studentIds.map((id, index) => ({
+          id: parseInt(id),
+          name: studentNames[index]
+        })),
+        subject: session.subject,
+        status: session.requestStatus || 'active',
+        createdAt: session.createdAt
       };
     }
 
@@ -865,7 +903,7 @@ router.put('/session/:id/respond', async (req, res) => {
         id: sessionRequest.id,
         status: status
       },
-      session: newSession
+      session: newSessionId
     });
   } catch (error) {
     await conn.rollback();
@@ -1267,11 +1305,13 @@ router.get('/current', async (req, res) => {
       // Add tutor-specific data
       formattedUser = {
         ...formattedUser,
-        location: user.location || null,
-        availability: availability,
-        isVerified: Boolean(user.isVerified),
-        careerStatus: user.careerStatus || null,
-        subjects: subjects.map(s => ({ name: s.name }))
+        tutor: {
+          location: user.location || null,
+          availability: availability,
+          isVerified: Boolean(user.isVerified),
+          careerStatus: user.careerStatus || null,
+          subjects: subjects.map(s => ({ name: s.name }))
+        }
       };
     } else if (user.role === 'STUDENT') {
       // Get student's preferred subjects
@@ -1286,13 +1326,12 @@ router.get('/current', async (req, res) => {
       // Add student-specific data
       formattedUser = {
         ...formattedUser,
-        learningGoals: user.learningGoals || null,
-        preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
+        student: {
+          learningGoals: user.learningGoals || null,
+          preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
+        }
       };
     }
-
-    // Log the formatted data for debugging
-    console.log('Formatted user data:', JSON.stringify(formattedUser, null, 2));
 
     res.status(200).json({ user: formattedUser });
   } catch (error) {

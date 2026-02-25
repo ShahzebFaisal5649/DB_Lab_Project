@@ -111,9 +111,11 @@ const RequestSession: React.FC<RequestSessionProps> = ({ userId }) => {
                       </SelectTrigger>
                       <SelectContent>
                         {tutors.map((tutor) => (
-                          <SelectItem key={tutor._id} value={tutor._id}>
-                            {tutor.name} - {tutor.subjects.join(', ')}
-                          </SelectItem>
+                          tutor._id && tutor.name ? (
+                            <SelectItem key={tutor._id} value={tutor._id}>
+                              {tutor.name} - {tutor.subjects?.join(', ') || ''}
+                            </SelectItem>
+                          ) : null
                         ))}
                       </SelectContent>
                     </Select>
