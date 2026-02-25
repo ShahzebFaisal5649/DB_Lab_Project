@@ -24,7 +24,9 @@ app.use(cors({
 
     // Normalize origins for comparison
     const normalizedOrigin = origin.replace(/\/$/, "");
-    const isAllowed = allowedOrigins.some(ao => ao && ao.replace(/\/$/, "") === normalizedOrigin);
+    const isAllowed =
+      allowedOrigins.some(ao => ao && ao.replace(/\/$/, "") === normalizedOrigin) ||
+      /\.vercel\.app$/.test(normalizedOrigin);
 
     if (!isAllowed && process.env.NODE_ENV !== 'development') {
       console.warn(`CORS blocked for origin: "${origin}". Normalized: "${normalizedOrigin}"`);
