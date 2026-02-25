@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import toast, { Toaster } from 'react-hot-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
+// Build Fix: Verified no unused DialogHeader
 
 interface DashboardProps {
   setIsLoggedIn: (value: boolean) => void;

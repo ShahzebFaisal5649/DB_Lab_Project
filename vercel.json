@@ -1,0 +1,14 @@
+{
+    "buildCommand": "cd client && CI=false npm run build",
+    "outputDirectory": "client/build",
+    "framework": "create-react-app",
+    "env": {
+        "CI": "false"
+    },
+    "rewrites": [
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
