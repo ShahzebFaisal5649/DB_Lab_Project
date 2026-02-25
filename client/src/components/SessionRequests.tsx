@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { API_BASE_URL, WS_BASE_URL } from '../config';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { ScrollArea } from "./ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar"
-import { Send } from "lucide-react"
+import { Send, ArrowLeft, PhoneOff } from "lucide-react"
 import { toast } from 'react-hot-toast';
 
 interface Message {
@@ -19,11 +19,13 @@ interface Message {
 
 const SessionRequests: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isEnding, setIsEnding] = useState(false);
   const ws = useRef<WebSocket | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -174,14 +176,51 @@ const SessionRequests: React.FC = () => {
     }
   };
 
+  const endSession = async () => {
+    setIsEnding(true);
+    try {
+      const userIdFromStorage = localStorage.getItem('userId') || '';
+      const res = await fetch(`${API_BASE_URL}/api/users/session/${sessionId}/end`, {
+        method: 'PUT',
+        headers: { 'user-id': userIdFromStorage },
+      });
+      if (res.ok) {
+        toast.success('Session ended');
+        if (ws.current) ws.current.close();
+        navigate('/dashboard');
+      } else {
+        toast.error('Failed to end session');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+    } finally {
+      setIsEnding(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
   return (
     <div className="flex flex-col h-screen max-w-2xl mx-auto bg-background">
-      <header className="p-4 border-b">
-        <h1 className="text-2xl font-bold">Chat Session</h1>
+      <header className="p-4 border-b flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-lg font-semibold">Chat Session</h1>
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={endSession}
+          disabled={isEnding}
+          className="gap-2"
+        >
+          <PhoneOff className="h-4 w-4" />
+          {isEnding ? 'Ending...' : 'End Session'}
+        </Button>
       </header>
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-4">

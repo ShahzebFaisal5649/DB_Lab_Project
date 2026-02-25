@@ -721,42 +721,48 @@ router.get('/session-requests', async (req, res) => {
 
     if (role === 'ADMIN') {
       sql = `
-        SELECT 
+        SELECT
           sr.*,
           s.userId as studentUserId, su.name as studentName,
           t.userId as tutorUserId, tu.name as tutorName,
-          sub.name as subjectName
+          sub.name as subjectName,
+          ses.id as sessionId
         FROM SessionRequest sr
         JOIN Student s ON sr.studentId = s.id
         JOIN User su ON s.userId = su.id
         JOIN Tutor t ON sr.tutorId = t.id
         JOIN User tu ON t.userId = tu.id
-        JOIN Subject sub ON sr.subjectId = sub.id`;
+        JOIN Subject sub ON sr.subjectId = sub.id
+        LEFT JOIN Session ses ON ses.sessionRequestId = sr.id`;
       params = [];
     } else if (role === 'STUDENT') {
       sql = `
-        SELECT 
+        SELECT
           sr.*,
           t.userId as tutorUserId, u.name as tutorName,
-          sub.name as subjectName
+          sub.name as subjectName,
+          ses.id as sessionId
         FROM SessionRequest sr
         JOIN Student s ON sr.studentId = s.id
         JOIN Tutor t ON sr.tutorId = t.id
         JOIN User u ON t.userId = u.id
         JOIN Subject sub ON sr.subjectId = sub.id
+        LEFT JOIN Session ses ON ses.sessionRequestId = sr.id
         WHERE s.userId = ?`;
       params = [userId];
     } else if (role === 'TUTOR') {
       sql = `
-        SELECT 
+        SELECT
           sr.*,
           s.userId as studentUserId, u.name as studentName,
-          sub.name as subjectName
+          sub.name as subjectName,
+          ses.id as sessionId
         FROM SessionRequest sr
         JOIN Student s ON sr.studentId = s.id
         JOIN User u ON s.userId = u.id
         JOIN Tutor t ON sr.tutorId = t.id
         JOIN Subject sub ON sr.subjectId = sub.id
+        LEFT JOIN Session ses ON ses.sessionRequestId = sr.id
         WHERE t.userId = ?`;
       params = [userId];
     } else {
@@ -768,6 +774,7 @@ router.get('/session-requests', async (req, res) => {
     // Format the requests
     const formattedRequests = requests.map(request => ({
       id: request.id,
+      sessionId: request.sessionId || null,
       student: {
         id: request.studentUserId,
         name: request.studentName
@@ -1342,6 +1349,33 @@ router.get('/current', async (req, res) => {
   }
 });
 
+// =============== END SESSION ===============
+
+// End Session (marks parent SessionRequest as 'completed')
+router.put('/session/:id/end', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    const sessionId = parseInt(req.params.id);
+
+    const [result] = await conn.execute(
+      `UPDATE SessionRequest SET status = 'completed'
+       WHERE id = (SELECT sessionRequestId FROM Session WHERE id = ?)`,
+      [sessionId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    res.status(200).json({ message: 'Session ended successfully' });
+  } catch (error) {
+    console.error('Error ending session:', error);
+    res.status(500).json({ message: 'Error ending session', error: error.message });
+  } finally {
+    conn.release();
+  }
+});
+
 // =============== FEEDBACK SYSTEM ===============
 
 // Submit Feedback
@@ -1352,13 +1386,13 @@ router.post('/session/:id/feedback', async (req, res) => {
     const { rating, comments, fromId } = req.body;
     const sessionId = parseInt(req.params.id);
 
-    // Get session and related data
+    // Get session and related data (sessionId here is SessionRequest.id)
     const [sessions] = await conn.execute(
       `SELECT s.*, sr.id as sessionRequestId, t.userId as tutorUserId
        FROM Session s
        JOIN SessionRequest sr ON s.sessionRequestId = sr.id
        JOIN Tutor t ON s.tutorId = t.id
-       WHERE s.id = ?`,
+       WHERE sr.id = ?`,
       [sessionId]
     );
 

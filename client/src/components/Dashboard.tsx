@@ -42,6 +42,7 @@ interface UserProfile {
 
 interface SessionRequest {
   id: number;
+  sessionId?: number | null;
   student: { name: string; id: number };
   tutor: { name: string; id: number };
   subject: string;
@@ -680,11 +681,13 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                               )}
                               {req.status?.toLowerCase() === 'accepted' && (
                                 <>
-                                  <Link to={`/chat/${req.id}`}>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-                                      <MessageSquare className="w-3 h-3" /> Chat
-                                    </Button>
-                                  </Link>
+                                  {req.sessionId && (
+                                    <Link to={`/chat/${req.sessionId}`}>
+                                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                                        <MessageSquare className="w-3 h-3" /> Chat
+                                      </Button>
+                                    </Link>
+                                  )}
                                   <Dialog>
                                     <DialogTrigger asChild>
                                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
