@@ -56,8 +56,8 @@ const CHART_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 const statusColors: Record<string, string> = {
   pending: 'border-border text-muted-foreground',
-  approved: 'border-border text-foreground',
-  rejected: 'border-destructive/30 text-destructive',
+  accepted: 'border-border text-foreground',
+  declined: 'border-destructive/30 text-destructive',
 };
 
 const AdminDashboard: React.FC = () => {
@@ -158,12 +158,15 @@ const AdminDashboard: React.FC = () => {
         headers: authHeaders(),
         body: JSON.stringify({ name: newSubject }),
       });
+      const data = await res.json();
       if (res.ok) {
         toast.success('Subject added');
         setNewSubject('');
         fetchSubjects();
+      } else {
+        toast.error(data.message || 'Failed to add subject');
       }
-    } catch (e) { toast.error('Failed to add subject'); }
+    } catch (e) { toast.error('Server unreachable. Check if backend is running.'); }
   };
 
   const deleteSubject = async (subjectId: string) => {
@@ -189,8 +192,8 @@ const AdminDashboard: React.FC = () => {
   // Chart Data
   const sessionsByStatus = [
     { name: 'Pending', value: sessionRequests.filter(s => s.status?.toLowerCase() === 'pending').length },
-    { name: 'Approved', value: sessionRequests.filter(s => s.status?.toLowerCase() === 'approved').length },
-    { name: 'Rejected', value: sessionRequests.filter(s => s.status?.toLowerCase() === 'rejected').length },
+    { name: 'Accepted', value: sessionRequests.filter(s => s.status?.toLowerCase() === 'accepted').length },
+    { name: 'Declined', value: sessionRequests.filter(s => s.status?.toLowerCase() === 'declined').length },
   ];
 
   const userDistribution = [

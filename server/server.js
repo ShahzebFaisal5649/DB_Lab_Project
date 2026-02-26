@@ -6,6 +6,11 @@ const WebSocket = require('ws');
 require('dotenv').config();
 const { pool } = require('./dbUtils');
 
+// Prevent DB/async errors from crashing the server
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection] Server kept alive:', reason?.message || reason);
+});
+
 // Initialize express app
 const app = express();
 

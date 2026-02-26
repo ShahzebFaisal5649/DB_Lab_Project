@@ -8,7 +8,6 @@ import * as z from "zod";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "./ui/form";
-import { Alert } from './ui/alert'; // Optional, if you want to show a better alert
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -60,22 +59,39 @@ const AdminRegister: React.FC = () => {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 rounded-xl bg-white shadow-lg">
-        <h1 className="text-3xl font-bold text-center">Admin Registration</h1>
+    <div className="flex justify-center items-center min-h-screen bg-background">
+      <div className="w-full max-w-md p-8 space-y-6 rounded-xl border border-border bg-card shadow-sm">
+        {/* Header */}
+        <div className="space-y-1 text-center">
+          <div className="flex justify-center mb-3">
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-lg">A</span>
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Admin Registration</h1>
+          <p className="text-sm text-muted-foreground">Create an EDUConnect admin account</p>
+        </div>
 
-        {/* Display success or error message */}
-        {successMessage && <Alert variant="default">{successMessage}</Alert>}
-        {errorMessage && <Alert variant="destructive">{errorMessage}</Alert>}
+        {/* Alerts */}
+        {successMessage && (
+          <div className="rounded-lg border border-border bg-secondary/50 px-4 py-3 text-sm text-foreground">
+            {successMessage}
+          </div>
+        )}
+        {errorMessage && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {errorMessage}
+          </div>
+        )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel className="text-foreground">Name</FormLabel>
                   <FormControl>
                     <Input placeholder="Admin name" {...field} />
                   </FormControl>
@@ -88,9 +104,9 @@ const AdminRegister: React.FC = () => {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel className="text-foreground">Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="Admin email" {...field} />
+                    <Input type="email" placeholder="admin@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -101,9 +117,9 @@ const AdminRegister: React.FC = () => {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel className="text-foreground">Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Admin password" {...field} />
+                    <Input type="password" placeholder="••••••••" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

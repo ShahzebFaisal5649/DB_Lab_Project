@@ -38,7 +38,7 @@ interface RegisterProps {
 }
 
 interface Subject {
-  _id: string;
+  id: number;
   name: string;
 }
 
@@ -312,7 +312,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
                       </FormControl>
                       <SelectContent>
                         {subjects.map((s) => s.name ? (
-                          <SelectItem key={s._id} value={s.name}>{s.name}</SelectItem>
+                          <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                         ) : null)}
                       </SelectContent>
                     </Select>
@@ -411,7 +411,7 @@ const Register: React.FC<RegisterProps> = ({ setIsLoggedIn, setUserRole, setUser
                       </FormControl>
                       <SelectContent>
                         {subjects.map((s) => s.name ? (
-                          <SelectItem key={s._id} value={s.name}>{s.name}</SelectItem>
+                          <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
                         ) : null)}
                       </SelectContent>
                     </Select>

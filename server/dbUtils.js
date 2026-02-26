@@ -3,6 +3,8 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 // Create connection pool
+const isCloud = process.env.DATABASE_URL && process.env.DATABASE_URL.includes('aivencloud.com');
+
 const baseConfig = process.env.DATABASE_URL ? { uri: process.env.DATABASE_URL } : {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'edu_connect_user',
@@ -16,12 +18,14 @@ const poolConfig = {
   connectionLimit: 10,
   queueLimit: 0,
   multipleStatements: true,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ...(isCloud && { ssl: { rejectUnauthorized: false } }),
 };
 
-const pool = mysql.createPool(poolConfig.uri || poolConfig);
+const pool = mysql.createPool(poolConfig.uri ? { uri: poolConfig.uri, ...(isCloud && { ssl: { rejectUnauthorized: false } }) } : poolConfig);
+// Prevent unhandled pool errors from crashing the server
+pool.on('error', (err) => {
+  console.error('DB pool error (handled):', err.message);
+});
 
 // Generic query executor
 async function executeQuery(sql, params = []) {
@@ -54,7 +58,7 @@ async function withTransaction(callback) {
 const dbOperations = {
   // User operations
   async findUserById(userId) {
-    const sql = "SELECT u.*, s.id as studentId, s.learningGoals, t.id as tutorId, t.location, t.availability, t.isVerified, GROUP_CONCAT(DISTINCT sub.name) as subjects FROM `User` u LEFT JOIN `Student` s ON u.id = s.userId LEFT JOIN `Tutor` t ON u.id = t.userId LEFT JOIN `_TutorSubjects` ts ON t.id = ts.A LEFT JOIN `Subject` sub ON ts.B = sub.id WHERE u.id = ? GROUP BY u.id";
+    const sql = "SELECT u.*, s.id as studentId, s.learningGoals, t.id as tutorId, t.location, t.availability, t.isVerified, GROUP_CONCAT(DISTINCT sub.name) as subjects FROM `User` u LEFT JOIN `Student` s ON u.id = s.userId LEFT JOIN `Tutor` t ON u.id = t.userId LEFT JOIN `_TutorSubjects` ts ON t.id = ts.B LEFT JOIN `Subject` sub ON ts.A = sub.id WHERE u.id = ? GROUP BY u.id";
     const results = await executeQuery(sql, [userId]);
     return results[0];
   },

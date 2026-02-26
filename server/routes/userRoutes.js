@@ -6,6 +6,16 @@ const multer = require('multer');
 const { pool } = require('../dbUtils');
 const { isAdmin } = require('../middleware/auth');
 
+// Wrap async route handlers so DB errors return 500 instead of crashing
+const asyncRoute = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch((err) => {
+    console.error('[Route error]', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  });
+};
+
 // Multer configuration
 const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
@@ -36,8 +46,8 @@ router.get('/admin/users', async (req, res) => {
           GROUP_CONCAT(DISTINCT s.name) as subjects
         FROM User u
         JOIN Tutor t ON u.id = t.userId
-        LEFT JOIN _TutorSubjects ts ON t.id = ts.A
-        LEFT JOIN Subject s ON ts.B = s.id
+        LEFT JOIN _TutorSubjects ts ON t.id = ts.B
+        LEFT JOIN Subject s ON ts.A = s.id
         WHERE u.role = ?
         GROUP BY u.id
       `;
@@ -228,6 +238,7 @@ router.post('/register', async (req, res) => {
       role,
       subjects = [],
       location,
+      country,
       availability,
       learningGoals,
       preferredSubjects = [],
@@ -294,7 +305,7 @@ router.post('/register', async (req, res) => {
     } else if (role === 'TUTOR') {
       const [tutorResult] = await conn.execute(
         'INSERT INTO `Tutor` (userId, location, availability) VALUES (?, ?, ?)',
-        [userId, location || null, JSON.stringify(availability) || null]
+        [userId, country || location || null, JSON.stringify(availability) || null]
       );
 
       const tutorId = tutorResult.insertId;
@@ -317,9 +328,10 @@ router.post('/register', async (req, res) => {
           subjectId = subjectResult[0].id;
         }
 
+        // Schema: _TutorSubjects A = Subject.id, B = Tutor.id
         await conn.execute(
           'INSERT INTO `_TutorSubjects` (A, B) VALUES (?, ?)',
-          [tutorId, subjectId]
+          [subjectId, tutorId]
         );
       }
     } else if (role === 'ADMIN') {
@@ -378,8 +390,8 @@ router.get('/profile/:id', async (req, res) => {
       const [subjects] = await conn.execute(`
         SELECT DISTINCT s.name
         FROM Subject s
-        JOIN _TutorSubjects ts ON s.id = ts.B
-        JOIN Tutor t ON ts.A = t.id
+        JOIN _TutorSubjects ts ON s.id = ts.A
+        JOIN Tutor t ON ts.B = t.id
         WHERE t.id = ?
       `, [user.tutorId]);
 
@@ -397,19 +409,17 @@ router.get('/profile/:id', async (req, res) => {
         availability = [];
       }
 
-      // Format tutor data
+      // Flat format — matches Dashboard UserProfile interface directly
       const formattedUser = {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        tutor: {
-          location: user.location || null,
-          availability: availability,
-          isVerified: Boolean(user.isVerified),
-          careerStatus: user.careerStatus || null,
-          subjects: subjects.map(s => ({ name: s.name }))
-        }
+        location: user.location || null,
+        availability: availability,
+        isVerified: Boolean(user.isVerified),
+        careerStatus: user.careerStatus || null,
+        subjects: subjects.map(s => ({ name: s.name }))
       };
 
       res.status(200).json({ user: formattedUser });
@@ -423,16 +433,14 @@ router.get('/profile/:id', async (req, res) => {
         WHERE st.id = ?
       `, [user.studentId]);
 
-      // Format student data
+      // Flat format — matches Dashboard UserProfile interface directly
       const formattedUser = {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        student: {
-          learningGoals: user.learningGoals || null,
-          preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
-        }
+        learningGoals: user.learningGoals || null,
+        preferredSubjects: preferredSubjects.map(s => ({ name: s.name }))
       };
 
       res.status(200).json({ user: formattedUser });
@@ -518,11 +526,18 @@ router.put('/profile/:id', async (req, res) => {
     const { role } = users[0];
 
     if (role === 'TUTOR') {
-      // Update tutor info
-      await conn.execute(
-        'UPDATE `Tutor` SET location = ?, availability = ? WHERE userId = ?',
-        [location, JSON.stringify(availability), userId]
-      );
+      // Update tutor info — only update availability if it was explicitly provided
+      if (availability !== undefined) {
+        await conn.execute(
+          'UPDATE `Tutor` SET location = ?, availability = ? WHERE userId = ?',
+          [location, JSON.stringify(availability), userId]
+        );
+      } else {
+        await conn.execute(
+          'UPDATE `Tutor` SET location = ? WHERE userId = ?',
+          [location, userId]
+        );
+      }
 
       // Update subjects
       if (subjects) {
@@ -533,13 +548,13 @@ router.put('/profile/:id', async (req, res) => {
         );
         const tutorId = tutors[0].id;
 
-        // Remove existing subjects
+        // Remove existing subjects (B = Tutor.id per schema)
         await conn.execute(
-          'DELETE FROM `_TutorSubjects` WHERE A = ?',
+          'DELETE FROM `_TutorSubjects` WHERE B = ?',
           [tutorId]
         );
 
-        // Add new subjects
+        // Add new subjects (A = Subject.id, B = Tutor.id per schema)
         for (const subject of subjects) {
           let [subjectResult] = await conn.execute(
             'SELECT id FROM `Subject` WHERE name = ?',
@@ -559,7 +574,7 @@ router.put('/profile/:id', async (req, res) => {
 
           await conn.execute(
             'INSERT INTO `_TutorSubjects` (A, B) VALUES (?, ?)',
-            [tutorId, subjectId]
+            [subjectId, tutorId]
           );
         }
       }
@@ -623,8 +638,8 @@ router.put('/profile/:id', async (req, res) => {
       FROM User u
       LEFT JOIN Student s ON u.id = s.userId
       LEFT JOIN Tutor t ON u.id = t.userId
-      LEFT JOIN _TutorSubjects ts ON t.id = ts.A
-      LEFT JOIN Subject sub ON ts.B = sub.id
+      LEFT JOIN _TutorSubjects ts ON t.id = ts.B
+      LEFT JOIN Subject sub ON ts.A = sub.id
       WHERE u.id = ?
       GROUP BY u.id`,
       [userId]
@@ -694,7 +709,7 @@ router.post('/session/request', async (req, res) => {
       `INSERT INTO SessionRequest 
        (studentId, tutorId, subjectId, content, requestedTime, status) 
        VALUES (?, ?, ?, ?, ?, 'pending')`,
-      [student[0].id, tutor[0].id, subjectId, content, new Date(requestedTime)]
+      [student[0].id, tutor[0].id, subjectId, content || '', new Date(requestedTime)]
     );
 
     await conn.commit();
@@ -1293,8 +1308,8 @@ router.get('/current', async (req, res) => {
       const [subjects] = await conn.execute(`
         SELECT DISTINCT s.name
         FROM Subject s
-        JOIN _TutorSubjects ts ON s.id = ts.B
-        JOIN Tutor t ON ts.A = t.id
+        JOIN _TutorSubjects ts ON s.id = ts.A
+        JOIN Tutor t ON ts.B = t.id
         WHERE t.id = ?
       `, [user.tutorId]);
 
@@ -1473,9 +1488,10 @@ router.get('/feedbacks', async (req, res) => {
 // =============== SUBJECT MANAGEMENT ===============
 
 // Get All Subjects
-router.get('/subjects', async (req, res) => {
-  const conn = await pool.getConnection();
+router.get('/subjects', asyncRoute(async (req, res) => {
+  let conn;
   try {
+    conn = await pool.getConnection();
     const [subjects] = await conn.execute(
       'SELECT id, name FROM Subject ORDER BY name'
     );
@@ -1484,14 +1500,15 @@ router.get('/subjects', async (req, res) => {
     console.error('Error fetching subjects:', error);
     res.status(500).json({ message: 'Error fetching subjects', error: error.message });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
-});
+}));
 
 // Add Subject (Admin only)
-router.post('/subjects', async (req, res) => {
-  const conn = await pool.getConnection();
+router.post('/subjects', asyncRoute(async (req, res) => {
+  let conn;
   try {
+    conn = await pool.getConnection();
     const { name } = req.body;
 
     // Check if subject already exists
@@ -1520,20 +1537,21 @@ router.post('/subjects', async (req, res) => {
     console.error('Error adding subject:', error);
     res.status(500).json({ message: 'Error adding subject', error: error.message });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
-});
+}));
 
 // Delete Subject (Admin only)
-router.delete('/subjects/:id', async (req, res) => {
-  const conn = await pool.getConnection();
+router.delete('/subjects/:id', asyncRoute(async (req, res) => {
+  let conn;
   try {
+    conn = await pool.getConnection();
     await conn.beginTransaction();
     const { id } = req.params;
 
-    // Remove subject associations first
+    // Remove subject associations first (A = Subject.id per schema)
     await conn.execute(
-      'DELETE FROM _TutorSubjects WHERE B = ?',
+      'DELETE FROM _TutorSubjects WHERE A = ?',
       [id]
     );
 
@@ -1551,24 +1569,26 @@ router.delete('/subjects/:id', async (req, res) => {
     await conn.commit();
     res.status(200).json({ message: 'Subject deleted successfully' });
   } catch (error) {
-    await conn.rollback();
+    if (conn) await conn.rollback();
     console.error('Error deleting subject:', error);
     res.status(500).json({ message: 'Error deleting subject', error: error.message });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
-});
+}));
 
 router.get('/search', async (req, res) => {
   const conn = await pool.getConnection();
   try {
     const { query, role } = req.query;
 
-    if (!query || !role) {
-      return res.status(400).json({ message: 'Query and role are required' });
+    if (!role) {
+      return res.status(400).json({ message: 'Role is required' });
     }
 
-    const searchTerm = `%${query.toLowerCase()}%`;
+    // Allow empty query — treat as "show all"
+    const rawQuery = (query || '').toString().trim();
+    const searchTerm = `%${rawQuery.toLowerCase()}%`;
     let sql, params;
 
     if (role.toLowerCase() === 'student') {
@@ -1586,14 +1606,14 @@ router.get('/search', async (req, res) => {
           COUNT(DISTINCT sr.id) as totalSessions
         FROM User u
         JOIN Tutor t ON u.id = t.userId
-        LEFT JOIN _TutorSubjects ts ON t.id = ts.A
-        LEFT JOIN Subject s ON ts.B = s.id
+        LEFT JOIN _TutorSubjects ts ON t.id = ts.B
+        LEFT JOIN Subject s ON ts.A = s.id
         LEFT JOIN Session sr ON t.id = sr.tutorId
         WHERE u.role = 'TUTOR'
           AND (LOWER(u.name) LIKE ? OR EXISTS (
-            SELECT 1 FROM _TutorSubjects ts2 
-            JOIN Subject s2 ON ts2.B = s2.id 
-            WHERE ts2.A = t.id AND LOWER(s2.name) LIKE ?
+            SELECT 1 FROM _TutorSubjects ts2
+            JOIN Subject s2 ON ts2.A = s2.id
+            WHERE ts2.B = t.id AND LOWER(s2.name) LIKE ?
           ))
         GROUP BY u.id, t.id, t.location, t.availability, t.isVerified
       `;
@@ -1640,8 +1660,8 @@ router.get('/search', async (req, res) => {
         const [subjects] = await conn.execute(`
           SELECT s.name
           FROM Subject s
-          JOIN _TutorSubjects ts ON s.id = ts.B
-          JOIN Tutor t ON ts.A = t.id
+          JOIN _TutorSubjects ts ON s.id = ts.A
+          JOIN Tutor t ON ts.B = t.id
           WHERE t.userId = ?
         `, [user.id]);
 

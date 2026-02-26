@@ -17,3 +17,16 @@ Thumbs.db
 # IDE specific files
 .vscode/
 .idea/
+
+# Large media files (>100MB — use external hosting)
+*.mp4
+*.mov
+*.avi
+
+# Claude Code internal files
+.claude/
+
+# Temp/debug scripts
+server/checkUser.js
+server/testBcrypt.js
+client/npm_start_output.txt

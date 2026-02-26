@@ -56,6 +56,7 @@ interface SearchResult {
   email: string;
   role: string;
   subjects?: { name: string }[];
+  preferredSubjects?: { name: string }[];
   isVerified?: boolean;
 }
 
@@ -77,6 +78,7 @@ const navItems = [
   { id: 'sessions' as ActiveSection, label: 'My Sessions', icon: <CalendarDays className="w-4 h-4" /> },
   { id: 'profile' as ActiveSection, label: 'Profile', icon: <User className="w-4 h-4" /> },
 ];
+// Label is dynamic — resolved inside the component based on userRole
 
 export default function Dashboard({ setIsLoggedIn, userRole, userId }: DashboardProps) {
   const navigate = useNavigate();
@@ -91,6 +93,12 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
   const [verificationFile, setVerificationFile] = useState<File | null>(null);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subjectFilter, setSubjectFilter] = useState('all');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editLearningGoals, setEditLearningGoals] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout>>();
 
   const userName = localStorage.getItem('userName') || profile?.name || 'User';
   const initials = userName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -147,13 +155,14 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
   const searchTutors = async (query: string) => {
     setIsSearching(true);
     try {
+      const role = userRole || 'STUDENT';
       const res = await fetch(
-        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(query)}&role=TUTOR`,
+        `${API_BASE_URL}/api/users/search?query=${encodeURIComponent(query)}&role=${role}`,
         { headers: { 'user-id': userId || '' } }
       );
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data.users || []);
+        setSearchResults(data.results || []);
       }
     } catch (err) {
       console.error('Error searching:', err);
@@ -165,8 +174,8 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const q = e.target.value;
     setSearchTerm(q);
-    const timer = setTimeout(() => searchTutors(q), 300);
-    return () => clearTimeout(timer);
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => searchTutors(q), 300);
   };
 
   const handleSessionResponse = async (sessionId: number, status: string) => {
@@ -223,6 +232,40 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
       }
     } catch (err) {
       toast.error('An error occurred');
+    }
+  };
+
+  const openEditDialog = () => {
+    setEditName(profile?.name || '');
+    setEditLocation(profile?.location || '');
+    setEditLearningGoals(profile?.learningGoals || '');
+    setEditDialogOpen(true);
+  };
+
+  const handleProfileUpdate = async () => {
+    setIsSavingProfile(true);
+    try {
+      const body: Record<string, unknown> = { name: editName };
+      if (userRole === 'TUTOR') body.location = editLocation;
+      if (userRole === 'STUDENT') body.learningGoals = editLearningGoals;
+      const res = await fetch(`${API_BASE_URL}/api/users/profile/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'user-id': userId || '' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        toast.success('Profile updated!');
+        localStorage.setItem('userName', editName);
+        setEditDialogOpen(false);
+        fetchProfile();
+      } else {
+        const data = await res.json();
+        toast.error(data.message || 'Failed to update profile');
+      }
+    } catch {
+      toast.error('An error occurred');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -294,9 +337,7 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
 
         {/* Nav Items */}
         <nav className="flex-1 p-3 space-y-1">
-          {navItems
-            .filter(item => !(item.id === 'find-tutors' && userRole === 'TUTOR'))
-            .map(item => (
+          {navItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
@@ -307,7 +348,7 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                 }`}
               >
                 {item.icon}
-                {item.label}
+                {item.id === 'find-tutors' ? (userRole === 'TUTOR' ? 'Find Students' : 'Find Tutors') : item.label}
                 {item.id === 'sessions' && pendingCount > 0 && (
                   <Badge className="ml-auto bg-primary text-primary-foreground border-0 text-xs px-1.5 py-0 h-5">
                     {pendingCount}
@@ -499,12 +540,14 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
               </>
             )}
 
-            {/* FIND TUTORS */}
-            {activeSection === 'find-tutors' && userRole === 'STUDENT' && (
+            {/* FIND TUTORS / FIND STUDENTS */}
+            {activeSection === 'find-tutors' && (
               <>
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-bold">Find Tutors</h2>
-                  <p className="text-muted-foreground text-sm">Browse verified tutors and request a session.</p>
+                  <h2 className="text-2xl font-bold">{userRole === 'TUTOR' ? 'Find Students' : 'Find Tutors'}</h2>
+                  <p className="text-muted-foreground text-sm">
+                    {userRole === 'TUTOR' ? 'Browse students looking for tutors.' : 'Browse verified tutors and request a session.'}
+                  </p>
                 </div>
 
                 <div className="flex gap-3">
@@ -517,18 +560,20 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                       onChange={handleSearch}
                     />
                   </div>
-                  <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                    <SelectTrigger className="w-44">
-                      <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <SelectValue placeholder="Subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Subjects</SelectItem>
-                      {subjects.map(s => (
-                        <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {userRole === 'STUDENT' && (
+                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                      <SelectTrigger className="w-44">
+                        <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                        <SelectValue placeholder="Subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Subjects</SelectItem>
+                        {subjects.map(s => (
+                          <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {isSearching ? (
@@ -540,9 +585,42 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                 ) : filteredTutors.length === 0 ? (
                   <div className="text-center py-16 text-muted-foreground">
                     <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                    <p>No tutors found. Try a different search.</p>
+                    <p>{userRole === 'TUTOR' ? 'No students found. Try a different search.' : 'No tutors found. Try a different search.'}</p>
+                  </div>
+                ) : userRole === 'TUTOR' ? (
+                  /* Tutor view: show students */
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredTutors.map(student => (
+                      <Card key={student.id} className="hover:shadow-md hover:border-primary/30 transition-all">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <Avatar className="w-12 h-12">
+                              <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                                {student.name?.charAt(0)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-sm truncate">{student.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">{student.email}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Preferred Subjects</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(student.preferredSubjects || []).slice(0, 3).map((s: { name: string }) => (
+                                <Badge key={s.name} variant="secondary" className="text-xs">{s.name}</Badge>
+                              ))}
+                              {(student.preferredSubjects || []).length === 0 && (
+                                <span className="text-xs text-muted-foreground">Not specified</span>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 ) : (
+                  /* Student view: show tutors */
                   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredTutors.map(tutor => (
                       <Card key={tutor.id} className="hover:shadow-md hover:border-primary/30 transition-all group">
@@ -556,7 +634,7 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-semibold text-sm truncate">{tutor.name}</p>
-                                {tutor.isVerified && (
+                                {!!tutor.isVerified && (
                                   <Badge variant="outline" className="text-xs px-1.5 border-border text-muted-foreground">
                                     Verified
                                   </Badge>
@@ -584,9 +662,7 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
 
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button
-                                className="w-full h-9 text-sm"
-                                        >
+                              <Button className="w-full h-9 text-sm">
                                 Request Session
                               </Button>
                             </DialogTrigger>
@@ -809,10 +885,57 @@ export default function Dashboard({ setIsLoggedIn, userRole, userId }: Dashboard
                     </div>
 
                     <div className="flex justify-end">
-                      <Button variant="outline" size="sm" className="gap-2">
+                      <Button variant="outline" size="sm" className="gap-2" onClick={openEditDialog}>
                         <User className="w-4 h-4" /> Edit Profile
                       </Button>
                     </div>
+
+                    {/* Edit Profile Dialog */}
+                    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Edit Profile</DialogTitle>
+                          <DialogDescription>Update your account information.</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                          <div className="space-y-2">
+                            <Label>Full Name</Label>
+                            <Input
+                              value={editName}
+                              onChange={e => setEditName(e.target.value)}
+                              placeholder="Your full name"
+                            />
+                          </div>
+                          {userRole === 'TUTOR' && (
+                            <div className="space-y-2">
+                              <Label>Location</Label>
+                              <Input
+                                value={editLocation}
+                                onChange={e => setEditLocation(e.target.value)}
+                                placeholder="Your country or city"
+                              />
+                            </div>
+                          )}
+                          {userRole === 'STUDENT' && (
+                            <div className="space-y-2">
+                              <Label>Learning Goals</Label>
+                              <Textarea
+                                value={editLearningGoals}
+                                onChange={e => setEditLearningGoals(e.target.value)}
+                                placeholder="e.g. Prepare for SAT, improve calculus..."
+                                rows={3}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                          <Button onClick={handleProfileUpdate} disabled={isSavingProfile}>
+                            {isSavingProfile ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </CardContent>
                 </Card>
               </>
@@ -836,6 +959,7 @@ interface RequestSessionFormProps {
 function RequestSessionForm({ tutorId, userId, subjects, onSuccess }: RequestSessionFormProps) {
   const [subject, setSubject] = useState('');
   const [requestedTime, setRequestedTime] = useState('');
+  const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -849,7 +973,7 @@ function RequestSessionForm({ tutorId, userId, subjects, onSuccess }: RequestSes
       const res = await fetch(`${API_BASE_URL}/api/users/session/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tutorId, studentId: userId, subject, requestedTime }),
+        body: JSON.stringify({ tutorId, studentId: userId, subject, requestedTime, content: message }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -887,6 +1011,15 @@ function RequestSessionForm({ tutorId, userId, subjects, onSuccess }: RequestSes
       <div className="space-y-2">
         <Label>Preferred Date & Time</Label>
         <Input type="datetime-local" value={requestedTime} onChange={e => setRequestedTime(e.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label>Message <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <Textarea
+          placeholder="Tell the tutor what you need help with..."
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          rows={3}
+        />
       </div>
       <DialogFooter>
         <Button type="submit" disabled={isLoading}>
